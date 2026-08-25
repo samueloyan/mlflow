@@ -1,0 +1,14 @@
+TENSORLANE PROPRIETARY LICENSE
+
+Copyright (c) 2026 Tensorlane. All rights reserved.
+
+The software in this directory, and in tests/tensorlane/, is proprietary to
+Tensorlane. You may not copy, modify, distribute, or use it except as expressly
+permitted in a written agreement with Tensorlane.
+
+This license does not apply to MLflow or other third-party components, which
+remain under their original licenses (Apache License 2.0 for MLflow).
+
+MLflow is a trademark of its respective owners. Tensorlane does not claim any
+right to that mark. Compatibility with the MLflow protocol does not imply
+endorsement.

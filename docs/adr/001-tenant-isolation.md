@@ -1,6 +1,6 @@
 # ADR 001 — Tenant isolation
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-08-25
 
 ## Problem

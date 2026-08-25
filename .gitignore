@@ -150,3 +150,17 @@ CLAUDE.local.md
 
 .playwright/
 .playwright-cli/
+
+# Tensorlane local
+.venv-tensorlane/
+tensorlane/web/.next/
+tensorlane/web/node_modules/
+tensorlane/web/*.tsbuildinfo
+tensorlane/*.db
+tensorlane.db
+tensorlane-dev.db
+deploy/compose/.env
+
+# Next.js helpers live in tensorlane/web/lib (MLflow ignores generic lib/)
+!tensorlane/web/lib/
+!tensorlane/web/lib/**

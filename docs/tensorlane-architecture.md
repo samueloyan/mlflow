@@ -1,6 +1,6 @@
 # Tensorlane Architecture
 
-**Status:** Proposed (Phase 0). Implementation starts only after approval.
+**Status:** Accepted (Phase 0). Phase 1 collocates the gateway and control plane in one FastAPI process; the MLflow data plane and Next.js app remain separate processes.
 
 Tensorlane is a **managed AI engineering platform** that is **MLflow compatible**. It is not a reskin and not a rewrite of MLflow.
 

@@ -1,6 +1,6 @@
 # ADR 004 — Authentication
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-08-25
 
 ## Problem
@@ -28,7 +28,7 @@ Building password storage or SAML ourselves is forbidden by product principles.
 
 Choose **option 2**.
 
-- Humans authenticate to the **control plane** via a hosted IdP (vendor TBD; interface stable).
+- Humans authenticate to the **control plane** via **Better Auth** (email/password + Google/GitHub/Microsoft). Tensorlane owns organizations; do not enable Better Auth’s organization plugin. Interface: `IdentityProvider`.
 - Machines use `tl_live_` / `tl_test_` keys; only hashes stored.
 - Gateway validates the token, authorizes, injects workspace, proxies to MLflow.
 - MLflow `--app-name` plugin (Tensorlane) rejects direct public access; accepts gateway-internal identity.
@@ -39,7 +39,7 @@ Phase 4: SAML/OIDC/SCIM through the same `IdentityProvider` (WorkOS-class), not 
 ## Tradeoffs
 
 - Local dev needs the gateway, not only `mlflow server`.
-- IdP vendor is still an open product/legal choice.
+- Login UI is ours to design (see Tensorlane web). SSO later uses the same `IdentityProvider` boundary.
 - Lost keys cannot be recovered (show once). Document rotation.
 
 ## Consequences

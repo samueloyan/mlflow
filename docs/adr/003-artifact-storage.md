@@ -1,6 +1,6 @@
 # ADR 003 — Artifact storage
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-08-25
 
 ## Problem

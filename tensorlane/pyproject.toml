@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tensorlane"
+version = "0.1.0"
+description = "Tensorlane control plane and gateway for MLflow-compatible AI engineering"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Proprietary" }
+authors = [{ name = "Tensorlane" }]
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.32.0",
+  "sqlalchemy>=2.0.36",
+  "pydantic>=2.9.0",
+  "pydantic-settings>=2.6.0",
+  "httpx>=0.27.0",
+  "python-multipart>=0.0.12",
+  "email-validator>=2.2.0",
+  "starlette>=0.41.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0",
+  "pytest-asyncio>=0.24.0",
+]
+postgres = [
+  "psycopg[binary]>=3.2.0",
+]
+
+[project.scripts]
+tensorlane = "tensorlane.cli:main"
+
+[project.entry-points."mlflow.app"]
+tensorlane = "tensorlane.data_plane.app:create_app"
+
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["../tests/tensorlane"]

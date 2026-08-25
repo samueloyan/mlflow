@@ -1,6 +1,6 @@
 # ADR 002 — MLflow extension strategy
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-08-25
 
 ## Problem

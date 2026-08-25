@@ -29,6 +29,9 @@ yarn-debug.log*
 yarn-error.log*
 __pycache__
 .*
+!tensorlane/web/.npmrc
+.venv-tensorlane
+tensorlane-dev.db
 ~*
 *.swp
 *.pyc

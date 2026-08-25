@@ -1,0 +1,10 @@
+MLflow
+Copyright 2018 Databricks, Inc.
+
+This product includes software developed as MLflow, licensed under the Apache
+License, Version 2.0. See LICENSE.txt for the Apache 2.0 terms that apply to
+files under mlflow/, libs/, and other upstream paths.
+
+Tensorlane proprietary components live under tensorlane/ and tests/tensorlane/
+and are licensed separately (see tensorlane/LICENSE). Tensorlane is not
+affiliated with, endorsed by, or sponsored by Databricks or the MLflow project.

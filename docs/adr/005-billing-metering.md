@@ -1,6 +1,6 @@
 # ADR 005 — Billing and metering
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-08-25
 
 ## Problem

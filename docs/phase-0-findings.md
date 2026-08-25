@@ -1,6 +1,8 @@
 # Phase 0 findings (architecture approval required)
 
-**Stop:** no Phase 1 implementation until this analysis and the ADRs are approved.
+**Status:** Approved. Phase 1 implementation follows these findings and ADRs.
+
+**Decisions (2026-08-25):** Better Auth; separate Next.js app + proxied MLflow UI; single host `api.tensorlane.ai`; org-wide workspace access; soft limits on traces/runs; throttled API requests; hard limits on storage/seats; pin current SHA (do not reset to v3.15.1). See [ADR 006](./adr/006-identity-and-defaults.md).
 
 Inspected repository: `samueloyan/mlflow` at `627d1ebd0` (`3.15.2.dev0`). Latest stable upstream release: **MLflow 3.15.1**. No Tensorlane code exists yet.
 
