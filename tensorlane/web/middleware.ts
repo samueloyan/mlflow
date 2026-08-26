@@ -9,6 +9,11 @@ const GATEWAY_PREFIXES = [
   "/ajax-api",
   "/mlflow",
   "/mlflow-artifacts",
+  "/v1/traces",
+  "/get-artifact",
+  "/graphql",
+  "/version",
+  "/static-files",
 ];
 
 export function middleware(request: NextRequest) {
