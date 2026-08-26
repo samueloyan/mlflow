@@ -281,10 +281,45 @@ export async function getTraceArtifact(
   ctx: TrackingContext,
   requestId: string,
 ): Promise<MlflowResult<{ spans?: TraceSpan[] }>> {
-  return mlflowCall(`/ajax-api/2.0/mlflow/get-trace-artifact?request_id=${encodeURIComponent(requestId)}`, {
-    ...ctxInit(ctx),
-    method: "GET",
-  });
+  const result = await mlflowCall<{ spans?: TraceSpan[] }>(
+    `/ajax-api/2.0/mlflow/get-trace-artifact?request_id=${encodeURIComponent(requestId)}`,
+    {
+      ...ctxInit(ctx),
+      method: "GET",
+    },
+  );
+  if (!result.ok) return result;
+  return { ok: true, data: { spans: (result.data.spans ?? []).map(normalizeTraceSpan) } };
+}
+
+function decodeJsonish(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  if (!trimmed) return value;
+  const first = trimmed[0];
+  const maybeJson =
+    first === "{" ||
+    first === "[" ||
+    first === '"' ||
+    trimmed === "true" ||
+    trimmed === "false" ||
+    trimmed === "null" ||
+    /^-?\d/.test(trimmed);
+  if (!maybeJson) return value;
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    return value;
+  }
+}
+
+export function normalizeTraceSpan(span: TraceSpan): TraceSpan {
+  const attributes = span.attributes ?? {};
+  const decoded: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(attributes)) {
+    decoded[key] = decodeJsonish(value);
+  }
+  return { ...span, attributes: decoded };
 }
 
 export function parseDurationMs(value: string | number | undefined): number | null {
