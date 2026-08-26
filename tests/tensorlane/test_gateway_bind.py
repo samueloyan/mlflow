@@ -26,6 +26,8 @@ async def experiments_create(request: Request) -> JSONResponse:
     captured["workspace"] = request.headers.get("x-mlflow-workspace")
     captured["authorization"] = request.headers.get("authorization")
     captured["cookie"] = request.headers.get("cookie")
+    captured["origin"] = request.headers.get("origin")
+    captured["referer"] = request.headers.get("referer")
     return JSONResponse({"experiment_id": "1"})
 
 
@@ -111,6 +113,8 @@ def test_gateway_overwrites_workspace_header_and_strips_key(fake_mlflow, tmp_pat
             headers={
                 "Authorization": f"Bearer {secret}",
                 "Cookie": "better-auth.session_token=should-not-leak",
+                "Origin": "https://tensorla.vercel.app",
+                "Referer": "https://tensorla.vercel.app/experiments",
             },
         )
         db.close()
@@ -120,6 +124,8 @@ def test_gateway_overwrites_workspace_header_and_strips_key(fake_mlflow, tmp_pat
     assert captured["workspace"] == workspace.mlflow_workspace_name
     assert captured["authorization"] is None
     assert captured["cookie"] is None
+    assert captured["origin"] is None
+    assert captured["referer"] is None
 
 
 def test_gateway_prefixes_mlflow_routes_for_static_prefix(tmp_path):

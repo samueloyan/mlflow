@@ -141,6 +141,10 @@ def _filter_request_headers(request: Request, *, strip_credentials: bool) -> dic
     if strip_credentials:
         headers.pop("authorization", None)
         headers.pop("cookie", None)
+        # MLflow treats Origin as a CORS check. The browser talks to the dashboard
+        # origin (rewritten onto this gateway); the data plane must not see it.
+        headers.pop("origin", None)
+        headers.pop("referer", None)
     return headers
 
 
