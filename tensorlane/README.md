@@ -114,29 +114,42 @@ docker compose -f deploy/compose/docker-compose.yml exec gateway tensorlane seed
 
 ## Production
 
-The dashboard is the Vercel project **tensorla** (`https://tensorla.vercel.app`, root directory `tensorlane/web`). Gateway, MLflow, and the job worker are **not** on Vercel. They run as one Docker web service (Render Blueprint `render.yaml`) so Next.js rewrites can reach a stable HTTPS origin.
+The dashboard is the Vercel project **tensorla** (`https://tensorla.vercel.app`, root directory `tensorlane/web`). Gateway, MLflow, and the job worker are **not** on Vercel. They run as one Docker process so Next.js rewrites can reach a stable HTTPS origin.
+
+**Fly.io is the production host** (2 GB VM, volume at `/var/mlflow`, region `iad` next to Neon). Render Free/Starter 512 MB instances OOM-kill this image.
 
 | Piece | Where |
 | --- | --- |
 | Dashboard + Better Auth | Vercel `tensorla` |
 | Control-plane DB (orgs, sessions, keys) | Neon `neondb` (existing). Gateway uses the **unpooled** URL. |
 | MLflow tracking DB | Neon database `mlflow` (same project). Unpooled `postgresql+psycopg2://…/mlflow?sslmode=require`. |
-| Artifacts | Render disk `/var/mlflow` (`file:///var/mlflow/artifacts`) or S3 later |
-| Public MLflow protocol | Gateway only. MLflow binds `127.0.0.1:5000` inside the container. |
+| Artifacts | Fly volume `mlflow_data` at `/var/mlflow` |
+| Public MLflow protocol | Gateway only. MLflow binds `127.0.0.1:5000` inside the Machine. |
 
 Keep `TENSORLANE_PEPPER` and `TENSORLANE_SECRET_KEY` exactly as they are. A new pepper invalidates live API keys and invites.
 
-### 1. Apply the Blueprint
+### 1. Deploy the gateway on Fly
 
-1. Open [Render Blueprint](https://dashboard.render.com/blueprint/new?repo=https://github.com/samueloyan/mlflow) and select branch `cursor/local-full-stack-97de`.
-2. Fill the `sync: false` env vars from `deploy/production.env.example` (Neon unpooled host, existing pepper/secret).
-3. Wait until `https://tensorlane-gateway.onrender.com/health` (or your service URL) returns `{"status":"ok","service":"tensorlane"}`.
+From `tensorlane/` with `FLY_API_TOKEN` set (create a token at https://fly.io/dashboard/personal/tokens):
 
-Use the **Standard** instance (2 GB). Free and Starter are 512 MB; MLflow plus the gateway is killed by the OOM killer on that size. One replica only while artifacts live on a local disk. The image installs PyPI `mlflow==3.15.1` so `/tracking` gets the built MLflow UI.
+```bash
+fly apps create tensorla-gateway --org personal
+fly volumes create mlflow_data --region iad --size 10 --yes
+fly secrets set \
+  DATABASE_URL='postgresql://…/neondb?sslmode=require' \
+  MLFLOW_BACKEND_STORE_URI='postgresql+psycopg2://…/mlflow?sslmode=require' \
+  TENSORLANE_PEPPER='…existing…' \
+  TENSORLANE_SECRET_KEY='…existing…'
+fly deploy
+```
+
+Wait until `https://tensorla-gateway.fly.dev/health` returns `{"status":"ok","service":"tensorlane"}`. One Machine only while artifacts live on a volume. The image installs PyPI `mlflow==3.15.1` so `/tracking` gets the built MLflow UI.
+
+`render.yaml` remains a fallback if you prefer Render Standard (also 2 GB, paid).
 
 ### 2. Point the dashboard at the gateway
 
-`TENSORLANE_API_ORIGIN` is read at **Next.js build time**. Set it on Vercel (Production, not Sensitive) to the Render HTTPS origin with no trailing slash, then redeploy **tensorla**.
+`TENSORLANE_API_ORIGIN` is read at **Next.js build time**. Set it on Vercel (Production, not Sensitive) to `https://tensorla-gateway.fly.dev` with no trailing slash, then redeploy **tensorla**.
 
 After cutover, workspace artifact roots that still say `file:///tmp/tensorlane-artifacts/...` are rewritten on `tensorlane sync-workspaces` / gateway boot to `ARTIFACT_ROOT`. Existing sqlite tracking data on a laptop or Cloud Agent VM is **not** migrated; log new runs against the Neon `mlflow` store.
 
@@ -158,6 +171,7 @@ mlflow.set_experiment("fraud-detection")
 | `src/tensorlane/` | Control plane, entitlements, gateway |
 | `web/` | Next.js dashboard + Better Auth |
 | `Dockerfile.runtime` | Production image: private MLflow + worker + gateway |
+| `fly.toml` | Fly.io production Machine (2 GB, `iad`) |
 | `../tests/tensorlane/` | Isolation, API, compatibility tests |
 | `../deploy/compose/` | Full local stack |
 | `../render.yaml` | Production Render Blueprint |
