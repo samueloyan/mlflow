@@ -23,16 +23,21 @@ export function CreateExperimentModal({
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setError("Enter an experiment name.");
+      return;
+    }
     setError(null);
     setBusy(true);
-    const result = await createExperiment(ctx, name.trim());
+    const result = await createExperiment(ctx, trimmed);
     setBusy(false);
     if (!result.ok) {
       setError(result.message);
       return;
     }
     toast.push("Experiment created.", "success");
-    onCreated(result.data.experiment_id ?? "", name.trim());
+    onCreated(result.data.experiment_id ?? "", trimmed);
   }
 
   return (

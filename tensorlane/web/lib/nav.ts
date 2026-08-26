@@ -100,6 +100,8 @@ export function visibleNav(
 }
 
 export function pageTitle(pathname: string): string {
+  if (pathname.startsWith("/design-system")) return "Design system";
+  if (pathname.startsWith("/onboarding")) return "Onboarding";
   const items = NAV.flatMap((group) => group.items);
   const exact = items.find((item) => pathname === item.href);
   if (exact) return exact.label;

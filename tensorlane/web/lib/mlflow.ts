@@ -42,6 +42,7 @@ export async function mlflowCall<T>(
       ...rest,
       credentials: "include",
       headers,
+      signal: rest.signal ?? AbortSignal.timeout(12_000),
     });
     const contentType = response.headers.get("content-type") ?? "";
     const isJson = contentType.includes("json");
