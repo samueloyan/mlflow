@@ -29,7 +29,7 @@ export function Sidebar({
   const displayName = me?.name || me?.email || "User";
 
   return (
-    <aside className="sidebar" data-open={mobileOpen}>
+    <aside className="sidebar" data-open={mobileOpen} data-collapsed={collapsed ? "true" : "false"}>
       <div className="sidebar-brand">
         <Wordmark tone="light" />
         <button type="button" className="nav-toggle" aria-expanded={mobileOpen} onClick={onMobileToggle}>
@@ -67,6 +67,7 @@ export function Sidebar({
           type="button"
           className="sidebar-collapse"
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-pressed={collapsed}
           onClick={onToggleCollapsed}
         >
           <Icon name={collapsed ? "chevron" : "collapse"} />

@@ -155,7 +155,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <a className="skip-link" href="#main">
           Skip to content
         </a>
-        <div className="app-frame" data-collapsed={collapsed}>
+        <div className="app-frame" data-collapsed={collapsed ? "true" : "false"}>
           <Sidebar
             navigation={navigation}
             collapsed={collapsed}
