@@ -39,27 +39,44 @@ export function Shell({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     async function load() {
       try {
-        const profile = await api<Me>("/api/v1/me");
-        const orgs = await api<Organization[]>("/api/v1/organizations");
-        if (cancelled) return;
-        setMe(profile);
-        setOrganizations(orgs);
-        if (orgs.length === 0) {
-          if (pathname !== "/onboarding") {
-            router.replace("/onboarding");
-          }
+        const sessionResponse = await fetch("/api/auth/get-session", { credentials: "include" });
+        const session = (await sessionResponse.json()) as {
+          user?: { id: string; email: string; name?: string | null };
+        } | null;
+        if (!session?.user) {
+          if (!cancelled) router.replace("/login");
           return;
         }
-        const stored = window.localStorage.getItem("tensorlane.org");
-        const nextOrg = orgs.find((org) => org.id === stored)?.id ?? orgs[0]?.id ?? null;
-        setOrganizationId(nextOrg);
+        const sessionMe: Me = {
+          id: session.user.id,
+          email: session.user.email,
+          name: session.user.name ?? "",
+          organizations: [],
+        };
+        if (cancelled) return;
+        setMe(sessionMe);
+        setError(null);
+        try {
+          const profile = await api<Me>("/api/v1/me");
+          const orgs = await api<Organization[]>("/api/v1/organizations");
+          if (cancelled) return;
+          setMe({ ...profile, name: profile.name || sessionMe.name, email: profile.email || sessionMe.email });
+          setOrganizations(orgs);
+          if (orgs.length === 0) {
+            if (pathname !== "/onboarding") {
+              router.replace("/onboarding");
+            }
+            return;
+          }
+          const stored = window.localStorage.getItem("tensorlane.org");
+          const nextOrg = orgs.find((org) => org.id === stored)?.id ?? orgs[0]?.id ?? null;
+          setOrganizationId(nextOrg);
+        } catch {
+          // Dashboard auth is local; the control plane/gateway is optional until it is deployed.
+        }
       } catch (err) {
         if (!cancelled) {
           const message = err instanceof Error ? err.message : "Unable to load workspace.";
-          if (message.toLowerCase().includes("authentication")) {
-            router.replace("/login");
-            return;
-          }
           setError(message);
         }
       }
@@ -75,12 +92,16 @@ export function Shell({ children }: { children: React.ReactNode }) {
     window.localStorage.setItem("tensorlane.org", organizationId);
     let cancelled = false;
     async function loadWorkspaces() {
-      const rows = await api<Workspace[]>(`/api/v1/workspaces?organization_id=${organizationId}`);
-      if (cancelled) return;
-      setWorkspaces(rows);
-      const stored = window.localStorage.getItem("tensorlane.workspace");
-      const next = rows.find((row) => row.id === stored)?.id ?? rows[0]?.id ?? null;
-      setWorkspaceId(next);
+      try {
+        const rows = await api<Workspace[]>(`/api/v1/workspaces?organization_id=${organizationId}`);
+        if (cancelled) return;
+        setWorkspaces(rows);
+        const stored = window.localStorage.getItem("tensorlane.workspace");
+        const next = rows.find((row) => row.id === stored)?.id ?? rows[0]?.id ?? null;
+        setWorkspaceId(next);
+      } catch {
+        if (!cancelled) setWorkspaces([]);
+      }
     }
     void loadWorkspaces();
     return () => {

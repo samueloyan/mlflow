@@ -143,7 +143,13 @@ export default function OverviewPage() {
     return (
       <div className="page">
         <h1>Overview</h1>
-        <p className="lede">Create an organization to begin.</p>
+        <p className="lede">
+          You&apos;re signed in. Create an organization once the Tensorlane gateway is connected —
+          tracking, membership, and billing APIs live there.
+        </p>
+        <p>
+          <Link href="/onboarding">Create organization</Link>
+        </p>
       </div>
     );
   }

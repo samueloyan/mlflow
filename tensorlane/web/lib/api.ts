@@ -175,14 +175,26 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   if (response.status === 204) {
     return undefined as T;
   }
-  const payload = (await response.json()) as T & ErrorBody;
+  const text = await response.text();
+  let payload: (T & ErrorBody) | undefined;
+  if (text) {
+    try {
+      payload = JSON.parse(text) as T & ErrorBody;
+    } catch {
+      throw new ApiError(
+        response.status,
+        response.ok ? "Unexpected non-JSON response." : `Request failed (${response.status}).`,
+        "NON_JSON",
+      );
+    }
+  }
   if (!response.ok) {
     throw new ApiError(
       response.status,
-      payload.error?.message ?? "Request failed.",
-      payload.error?.code ?? "ERROR",
-      payload.error?.request_id,
+      payload?.error?.message ?? `Request failed (${response.status}).`,
+      payload?.error?.code ?? "ERROR",
+      payload?.error?.request_id,
     );
   }
-  return payload;
+  return payload as T;
 }
