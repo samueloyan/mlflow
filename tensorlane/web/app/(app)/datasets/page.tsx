@@ -20,6 +20,7 @@ export default function DatasetsPage() {
   async function load() {
     if (!ctx) return;
     setLoading(true);
+    setError(null);
     const experiments = await searchExperiments(ctx);
     if (!experiments.ok) {
       setError(experiments.message);

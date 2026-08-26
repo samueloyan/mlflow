@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { EmptyState, PageHeader } from "@/components/PageHeader";
+import { ErrorState } from "@/components/ui/EmptyState";
 import { SavedViews } from "@/components/SavedViews";
 import { useTrackingContext } from "@/lib/useTrackingContext";
 import { searchLoggedModels } from "@/lib/tracking";
@@ -13,32 +14,38 @@ type Row = { name: string; experimentId?: string; runId?: string };
 export default function EvaluationsPage() {
   const ctx = useTrackingContext();
   const [query, setQuery] = useState("");
-  const [rows, setRows] = useState<Row[] | null>(null);
+  const [rows, setRows] = useState<Row[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  async function load() {
+    if (!ctx) return;
+    setLoading(true);
+    setError(null);
+    const result = await searchLoggedModels(ctx);
+    if (!result.ok) {
+      setError(result.message);
+      setLoading(false);
+      return;
+    }
+    setRows(
+      (result.data.models ?? []).map((row) => ({
+        name: row.info?.name ?? "model",
+        experimentId: row.info?.experiment_id,
+        runId: row.info?.source_run_id,
+      })),
+    );
+    setLoading(false);
+  }
 
   useEffect(() => {
-    if (!ctx) return;
-    void searchLoggedModels(ctx).then((result) => {
-      if (!result.ok) {
-        setError(result.message);
-        setRows([]);
-        return;
-      }
-      setRows(
-        (result.data.models ?? []).map((row) => ({
-          name: row.info?.name ?? "model",
-          experimentId: row.info?.experiment_id,
-          runId: row.info?.source_run_id,
-        })),
-      );
-    });
+    void load();
   }, [ctx]);
 
   const filtered = useMemo(() => {
-    const list = rows ?? [];
     const needle = query.trim().toLowerCase();
-    if (!needle) return list;
-    return list.filter((row) => row.name.toLowerCase().includes(needle));
+    if (!needle) return rows;
+    return rows.filter((row) => row.name.toLowerCase().includes(needle));
   }, [query, rows]);
 
   return (
@@ -58,10 +65,10 @@ export default function EvaluationsPage() {
             <span>Search</span>
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name" />
           </label>
-          {rows === null ? (
+          {error ? (
+            <ErrorState title="Unable to load evaluations" body={error} onRetry={() => void load()} />
+          ) : loading ? (
             <p className="lede">Loading evaluations…</p>
-          ) : error ? (
-            <p className="lede">{error}</p>
           ) : filtered.length === 0 ? (
             <EmptyState
               title="No evaluations yet"

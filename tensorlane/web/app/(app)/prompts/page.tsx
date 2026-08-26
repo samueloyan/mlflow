@@ -4,34 +4,49 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { EmptyState, PageHeader } from "@/components/PageHeader";
+import { ErrorState } from "@/components/ui/EmptyState";
 import { SavedViews } from "@/components/SavedViews";
-import { mlflowJson } from "@/lib/mlflow";
-import { useShell } from "@/lib/shell";
+import { mlflowCall } from "@/lib/mlflow";
+import { useTrackingContext } from "@/lib/useTrackingContext";
 
 type Model = { name?: string; last_updated_timestamp?: number };
 
 export default function PromptsPage() {
-  const { organization, workspace } = useShell();
+  const ctx = useTrackingContext();
   const [query, setQuery] = useState("");
-  const [rows, setRows] = useState<Model[] | null>(null);
+  const [rows, setRows] = useState<Model[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!organization || !workspace) return;
-    void mlflowJson<{ registered_models?: Model[] }>(
+  async function load() {
+    if (!ctx) return;
+    setLoading(true);
+    setError(null);
+    const result = await mlflowCall<{ registered_models?: Model[] }>(
       "/ajax-api/2.0/mlflow/registered-models/search",
       {
         method: "GET",
-        organizationId: organization.id,
-        workspaceId: workspace.id,
+        organizationId: ctx.organizationId,
+        workspaceId: ctx.workspaceId,
       },
-    ).then((payload) => setRows(payload?.registered_models ?? []));
-  }, [organization, workspace]);
+    );
+    if (!result.ok) {
+      setError(result.message);
+      setLoading(false);
+      return;
+    }
+    setRows(result.data.registered_models ?? []);
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    void load();
+  }, [ctx]);
 
   const filtered = useMemo(() => {
-    const list = rows ?? [];
     const needle = query.trim().toLowerCase();
-    if (!needle) return list;
-    return list.filter((row) => (row.name ?? "").toLowerCase().includes(needle));
+    if (!needle) return rows;
+    return rows.filter((row) => (row.name ?? "").toLowerCase().includes(needle));
   }, [query, rows]);
 
   return (
@@ -55,7 +70,9 @@ export default function PromptsPage() {
               placeholder="Prompt name"
             />
           </label>
-          {rows === null ? (
+          {error ? (
+            <ErrorState title="Unable to load prompts" body={error} onRetry={() => void load()} />
+          ) : loading ? (
             <p className="lede">Loading prompts…</p>
           ) : filtered.length === 0 ? (
             <EmptyState

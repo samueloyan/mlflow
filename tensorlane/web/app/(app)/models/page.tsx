@@ -24,6 +24,7 @@ function ModelsInner() {
   async function load() {
     if (!ctx) return;
     setLoading(true);
+    setError(null);
     const result = await searchRegisteredModels(ctx);
     if (!result.ok) {
       setError(result.message);

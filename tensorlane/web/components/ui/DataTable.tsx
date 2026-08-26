@@ -165,10 +165,10 @@ export function DataTable<T>({
           {selectable && selected && selected.length > 0 ? bulkActions : null}
         </div>
       )}
-      {loading ? (
-        <TableSkeleton cols={visibleColumns.length + (selectable ? 1 : 0)} />
-      ) : error ? (
+      {error ? (
         <ErrorState title="Unable to load this table" body={error} onRetry={onRetry} />
+      ) : loading ? (
+        <TableSkeleton cols={visibleColumns.length + (selectable ? 1 : 0)} />
       ) : rows.length === 0 ? (
         <EmptyState title={emptyTitle} body={emptyBody} action={emptyAction} />
       ) : (

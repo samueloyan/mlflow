@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { PageHeader } from "@/components/PageHeader";
+import { ErrorState } from "@/components/ui/EmptyState";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { ChartCard, LineChart, BarChart } from "@/components/ui/Charts";
 import { api, type AlertEvent, type AlertRule, type Usage } from "@/lib/api";
@@ -19,6 +20,8 @@ export default function MonitoringPage() {
   const [rules, setRules] = useState<AlertRule[]>([]);
   const [events, setEvents] = useState<AlertEvent[]>([]);
   const [traces, setTraces] = useState<TraceInfo[]>([]);
+  const [trackingError, setTrackingError] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     if (!organization) return;
@@ -33,13 +36,26 @@ export default function MonitoringPage() {
 
   useEffect(() => {
     if (!ctx) return;
+    let cancelled = false;
     void searchExperiments(ctx).then(async (result) => {
-      if (!result.ok) return;
+      if (!result.ok) {
+        if (!cancelled) setTrackingError(result.message);
+        return;
+      }
       const ids = (result.data.experiments ?? []).map((row) => row.experiment_id).filter((id): id is string => Boolean(id));
       const tracesResult = await searchTraces(ctx, ids, { maxResults: 100 });
-      if (tracesResult.ok) setTraces(tracesResult.data.traces ?? []);
+      if (cancelled) return;
+      if (!tracesResult.ok) {
+        setTrackingError(tracesResult.message);
+        return;
+      }
+      setTrackingError(null);
+      setTraces(tracesResult.data.traces ?? []);
     });
-  }, [ctx]);
+    return () => {
+      cancelled = true;
+    };
+  }, [ctx, reload]);
 
   const errorTraces = traces.filter((trace) => (trace.state || trace.status || "").toUpperCase() === "ERROR");
   const errorRate = traces.length ? (errorTraces.length / traces.length) * 100 : 0;
@@ -55,6 +71,13 @@ export default function MonitoringPage() {
           Alert rules
         </Link>
       </PageHeader>
+      {trackingError ? (
+        <ErrorState
+          title="Unable to load workspace telemetry"
+          body={trackingError}
+          onRetry={() => setReload((value) => value + 1)}
+        />
+      ) : null}
       <div className="grid">
         <div className="span-3">
           <MetricCard label="Applications" value={formatCount(1)} hint="This workspace" icon="monitoring" />
