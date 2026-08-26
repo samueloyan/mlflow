@@ -42,7 +42,7 @@ export async function mlflowCall<T>(
       ...rest,
       credentials: "include",
       headers,
-      signal: rest.signal ?? AbortSignal.timeout(12_000),
+      signal: rest.signal ?? AbortSignal.timeout(30_000),
     });
     const text = await response.text();
     let payload: unknown = null;

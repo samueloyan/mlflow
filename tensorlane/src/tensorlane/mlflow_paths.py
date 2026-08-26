@@ -43,3 +43,70 @@ def mlflow_upstream_path(public_path: str, static_prefix: str | None) -> str:
 
 def mlflow_internal_url(origin: str, static_prefix: str | None, public_path: str) -> str:
     return origin.rstrip("/") + mlflow_upstream_path(public_path, static_prefix)
+
+
+def is_get_trace_artifact(path: str) -> bool:
+    route = path.lower().split("?", 1)[0].rstrip("/")
+    return route.endswith("/mlflow/get-trace-artifact")
+
+
+_READ_RPC_MARKERS = (
+    "/search",
+    "/list",
+    "search-datasets",
+    "/batchget",
+    "/get-history",
+    "/get-trace-artifact",
+    "/traces/get",
+    "/registered-models/get",
+    "/model-versions/get",
+)
+
+
+def is_mlflow_write(path: str, method: str) -> bool:
+    """True when the RPC mutates tracking data.
+
+    MLflow search/list/get calls are POST in the protocol, but they are reads for
+    authorization, rate limits, and usage meters.
+    """
+    method = method.upper()
+    if method in {"GET", "HEAD", "OPTIONS"}:
+        return False
+    route = path.lower().split("?", 1)[0]
+    return not any(marker in route for marker in _READ_RPC_MARKERS)
+
+
+def is_trace_ingest(path: str, method: str) -> bool:
+    """True when the request creates or appends trace data, not when it searches or reads."""
+    if not is_mlflow_write(path, method):
+        return False
+    if method.upper() not in {"POST", "PUT", "PATCH"}:
+        return False
+    lowered = path.lower().split("?", 1)[0]
+    if "/delete-traces" in lowered or "/traces/delete" in lowered:
+        return False
+    if "/v1/traces" in lowered:
+        return True
+    return "/mlflow/traces" in lowered
+
+
+def relative_trace_artifact_path(location: str, attachment: str | None = None) -> str | None:
+    """Turn a ``mlflow-artifacts:/...`` tag into the HTTP artifact path."""
+    if not location:
+        return None
+    relative = location.strip()
+    for prefix in ("mlflow-artifacts://", "mlflow-artifacts:/", "file://"):
+        if relative.startswith(prefix):
+            relative = relative[len(prefix) :]
+            break
+    else:
+        if "://" in relative:
+            relative = relative.split("://", 1)[-1]
+    relative = relative.lstrip("/")
+    if not relative:
+        return None
+    if attachment:
+        return f"{relative.rstrip('/')}/attachments/{attachment.lstrip('/')}"
+    if relative.endswith("/traces.json") or relative.endswith("traces.json"):
+        return relative
+    return f"{relative.rstrip('/')}/traces.json"

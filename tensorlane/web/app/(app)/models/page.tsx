@@ -8,7 +8,7 @@ import { DataTable } from "@/components/ui/DataTable";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { formatEpoch } from "@/lib/format";
 import { useTrackingContext } from "@/lib/useTrackingContext";
-import { searchRegisteredModels, type RegisteredModel } from "@/lib/tracking";
+import { MODEL_REGISTRY_FILTER, searchRegisteredModels, type RegisteredModel } from "@/lib/tracking";
 import { useSyncedSearchParams } from "@/lib/useSyncedSearchParams";
 
 function ModelsInner() {
@@ -25,7 +25,7 @@ function ModelsInner() {
     if (!ctx) return;
     setLoading(true);
     setError(null);
-    const result = await searchRegisteredModels(ctx);
+    const result = await searchRegisteredModels(ctx, { filter: MODEL_REGISTRY_FILTER });
     if (!result.ok) {
       setError(result.message);
       setLoading(false);
@@ -95,7 +95,9 @@ function ModelsInner() {
           searchPlaceholder="Search models"
           emptyTitle="No registered models"
           emptyBody="Register a model from a run with the MLflow SDK. Aliases and stages stay in the registry."
-          onRowClick={(row) => row.name && router.push(`/tracking`)}
+          onRowClick={(row) =>
+            row.name && router.push(`/tracking?hash=/models/${encodeURIComponent(row.name)}`)
+          }
         />
       </div>
     </div>

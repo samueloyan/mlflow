@@ -5,12 +5,14 @@ import { useState } from "react";
 
 import { CodeBlock } from "@/components/ui/CodeBlock";
 import { api, type Organization } from "@/lib/api";
+import { usePublicTrackingUri } from "@/lib/usePublicTrackingUri";
 
 export default function OnboardingPage() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [workspace, setWorkspace] = useState("Production");
   const [message, setMessage] = useState<string | null>(null);
+  const tracking = usePublicTrackingUri();
 
   async function create(event: React.FormEvent) {
     event.preventDefault();
@@ -58,7 +60,7 @@ export default function OnboardingPage() {
         <CodeBlock
           value={`import mlflow
 
-mlflow.set_tracking_uri("https://api.tensorlane.ai")
+mlflow.set_tracking_uri("${tracking}")
 
 with mlflow.start_run():
     mlflow.log_param("model", "gpt-4o")

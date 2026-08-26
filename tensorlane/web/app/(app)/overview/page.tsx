@@ -18,11 +18,13 @@ import { Icon } from "@/components/ui/Icons";
 import { api, type Approval, type Usage } from "@/lib/api";
 import { formatCount, formatDurationBetween, formatEpoch, greeting, periodDelta } from "@/lib/format";
 import { canWrite } from "@/lib/permissions";
+import { usePublicTrackingUri } from "@/lib/usePublicTrackingUri";
 import { useShell } from "@/lib/shell";
 import { useTrackingContext } from "@/lib/useTrackingContext";
 import {
   bucketByDay,
   metricMap,
+  MODEL_REGISTRY_FILTER,
   runId,
   runName,
   runStatusLabel,
@@ -50,7 +52,7 @@ export default function OverviewPage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [reload, setReload] = useState(0);
-  const tracking = process.env.NEXT_PUBLIC_TRACKING_URI || "https://api.tensorlane.ai";
+  const tracking = usePublicTrackingUri();
   const firstName = (me.name || me.email || "there").split(/\s+/)[0];
 
   useEffect(() => {
@@ -85,7 +87,7 @@ export default function OverviewPage() {
       const [runResult, traceResult, modelResult] = await Promise.all([
         searchRuns(trackingCtx, ids, { maxResults: 200 }),
         searchTraces(trackingCtx, ids, { maxResults: 100 }),
-        searchRegisteredModels(trackingCtx),
+        searchRegisteredModels(trackingCtx, { filter: MODEL_REGISTRY_FILTER }),
       ]);
       if (cancelled) return;
       if (!runResult.ok) {

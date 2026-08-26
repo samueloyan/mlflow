@@ -1,20 +1,21 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { EmptyState, PageHeader } from "@/components/PageHeader";
 import { ErrorState } from "@/components/ui/EmptyState";
 import { SavedViews } from "@/components/SavedViews";
-import { mlflowCall } from "@/lib/mlflow";
+import { formatEpoch } from "@/lib/format";
 import { useTrackingContext } from "@/lib/useTrackingContext";
-
-type Model = { name?: string; last_updated_timestamp?: number };
+import { searchPrompts, type RegisteredModel } from "@/lib/tracking";
 
 export default function PromptsPage() {
+  const router = useRouter();
   const ctx = useTrackingContext();
   const [query, setQuery] = useState("");
-  const [rows, setRows] = useState<Model[]>([]);
+  const [rows, setRows] = useState<RegisteredModel[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -22,14 +23,7 @@ export default function PromptsPage() {
     if (!ctx) return;
     setLoading(true);
     setError(null);
-    const result = await mlflowCall<{ registered_models?: Model[] }>(
-      "/ajax-api/2.0/mlflow/registered-models/search",
-      {
-        method: "GET",
-        organizationId: ctx.organizationId,
-        workspaceId: ctx.workspaceId,
-      },
-    );
+    const result = await searchPrompts(ctx);
     if (!result.ok) {
       setError(result.message);
       setLoading(false);
@@ -84,18 +78,23 @@ export default function PromptsPage() {
               <thead>
                 <tr>
                   <th>Name</th>
+                  <th>Version</th>
                   <th>Updated</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((row) => (
-                  <tr key={row.name}>
+                  <tr
+                    key={row.name}
+                    style={{ cursor: row.name ? "pointer" : undefined }}
+                    onClick={() =>
+                      row.name &&
+                      router.push(`/tracking?hash=/models/${encodeURIComponent(row.name)}`)
+                    }
+                  >
                     <td>{row.name}</td>
-                    <td>
-                      {row.last_updated_timestamp
-                        ? new Date(row.last_updated_timestamp).toLocaleString()
-                        : "—"}
-                    </td>
+                    <td>{row.latest_versions?.[0]?.version ?? "—"}</td>
+                    <td>{formatEpoch(row.last_updated_timestamp)}</td>
                   </tr>
                 ))}
               </tbody>

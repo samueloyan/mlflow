@@ -154,14 +154,47 @@ def test_mlflow_upstream_path_prefixes_protocol_not_artifacts():
     assert mlflow_upstream_path("/api/2.0/mlflow-artifacts/artifacts", "/mlflow") == (
         "/mlflow/api/2.0/mlflow-artifacts/artifacts"
     )
-    assert mlflow_upstream_path(
-        "/api/2.0/mlflow-artifacts/artifacts/run/model.pkl", "/mlflow"
-    ) == "/mlflow/api/2.0/mlflow-artifacts/artifacts/run/model.pkl"
+    assert (
+        mlflow_upstream_path("/api/2.0/mlflow-artifacts/artifacts/run/model.pkl", "/mlflow")
+        == "/mlflow/api/2.0/mlflow-artifacts/artifacts/run/model.pkl"
+    )
     assert mlflow_upstream_path("/api/2.0/mlflow/runs/create", "") == "/api/2.0/mlflow/runs/create"
     assert (
         mlflow_internal_url("http://127.0.0.1:5000", "/mlflow", "/api/3.0/mlflow/workspaces")
         == "http://127.0.0.1:5000/mlflow/api/3.0/mlflow/workspaces"
     )
+
+
+def test_search_and_list_rpcs_are_reads():
+    from tensorlane.mlflow_paths import is_mlflow_write, is_trace_ingest
+
+    assert is_mlflow_write("/ajax-api/2.0/mlflow/experiments/search", "POST") is False
+    assert is_mlflow_write("/ajax-api/2.0/mlflow/runs/search", "POST") is False
+    assert is_mlflow_write("/ajax-api/3.0/mlflow/traces/search", "POST") is False
+    assert is_mlflow_write("/ajax-api/2.0/mlflow/experiments/search-datasets", "POST") is False
+    assert is_mlflow_write("/ajax-api/2.0/mlflow/artifacts/list", "GET") is False
+    assert is_mlflow_write("/api/2.0/mlflow/experiments/create", "POST") is True
+    assert is_mlflow_write("/api/2.0/mlflow/runs/create", "POST") is True
+    assert is_trace_ingest("/ajax-api/3.0/mlflow/traces/search", "POST") is False
+    assert is_trace_ingest("/ajax-api/3.0/mlflow/traces", "POST") is True
+    assert is_trace_ingest("/v1/traces", "POST") is True
+
+
+def test_relative_trace_artifact_path_from_tag():
+    from tensorlane.mlflow_paths import relative_trace_artifact_path
+
+    location = "mlflow-artifacts:/org/org_a/workspace/ws_a/4/traces/tr-abc/artifacts"
+    assert relative_trace_artifact_path(location) == (
+        "org/org_a/workspace/ws_a/4/traces/tr-abc/artifacts/traces.json"
+    )
+    assert relative_trace_artifact_path(f"{location}/traces.json") == (
+        "org/org_a/workspace/ws_a/4/traces/tr-abc/artifacts/traces.json"
+    )
+    assert relative_trace_artifact_path(location, "span.json") == (
+        "org/org_a/workspace/ws_a/4/traces/tr-abc/artifacts/attachments/span.json"
+    )
+    doubled = "mlflow-artifacts://org/org_a/workspace/ws_a/4/traces/tr-abc/artifacts"
+    assert relative_trace_artifact_path(doubled) == relative_trace_artifact_path(location)
 
 
 def test_sync_workspaces_creates_every_live_workspace(db, two_tenants):

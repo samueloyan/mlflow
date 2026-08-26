@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { api, type ApiKey, type CreatedApiKey } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { canManageKeys } from "@/lib/permissions";
+import { usePublicTrackingUri } from "@/lib/usePublicTrackingUri";
 import { useShell } from "@/lib/shell";
 import { Modal } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
@@ -21,7 +22,7 @@ export default function ApiKeysPage() {
   const [secret, setSecret] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const tracking = process.env.NEXT_PUBLIC_TRACKING_URI || "https://api.tensorlane.ai";
+  const tracking = usePublicTrackingUri();
   const canCreate = canManageKeys(role);
 
   async function refresh() {

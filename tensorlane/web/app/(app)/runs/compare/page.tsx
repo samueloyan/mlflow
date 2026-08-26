@@ -32,20 +32,30 @@ function CompareInner() {
     .slice(0, 10);
   const [runs, setRuns] = useState<Run[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(ids.length >= 2);
 
   useEffect(() => {
-    if (!ctx || ids.length < 2) return;
+    if (!ctx || ids.length < 2) {
+      setLoading(false);
+      return;
+    }
     const tracking = ctx;
     let cancelled = false;
     async function load() {
+      setLoading(true);
+      setError(null);
       const results = await Promise.all(ids.map((id) => getRun(tracking, id)));
       if (cancelled) return;
       const failed = results.find((result) => !result.ok);
       if (failed && !failed.ok) {
         setError(failed.message);
+        setLoading(false);
         return;
       }
-      setRuns(results.map((result) => (result.ok ? result.data.run : null)).filter((row): row is Run => Boolean(row)));
+      setRuns(
+        results.map((result) => (result.ok ? result.data.run : null)).filter((row): row is Run => Boolean(row)),
+      );
+      setLoading(false);
     }
     void load();
     return () => {
@@ -84,6 +94,14 @@ function CompareInner() {
     return (
       <div className="page">
         <ErrorState title="Unable to compare runs" body={error} />
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="page">
+        <PageHeader title="Compare runs" lede="Loading selected runs…" />
       </div>
     );
   }

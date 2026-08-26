@@ -606,6 +606,13 @@ def _get_trace_repo_from_uri(artifact_uri: str):
                 "Trace artifact URI must contain subpath to the trace data directory.",
                 error_code=BAD_REQUEST,
             )
+        # Proxied HTTP artifact routes rewrite paths under workspaces/<name>/. Trace
+        # artifact tags store the unprefixed mlflow-artifacts URI, so apply the same
+        # rewrite when an active workspace is bound.
+        if MLFLOW_ENABLE_WORKSPACES.get() and workspace_context.get_request_workspace():
+            scoped = _get_workspace_scoped_repo_path_if_enabled(path)
+            if scoped:
+                path = scoped
         root = os.environ[ARTIFACTS_DESTINATION_ENV_VAR]
         artifact_uri = posixpath.join(root, path)
 

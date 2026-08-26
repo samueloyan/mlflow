@@ -1,3 +1,4 @@
+import { AuthHostChip } from "@/components/AuthHostChip";
 import { Wordmark } from "@/components/Wordmark";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
@@ -15,7 +16,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             understands. Experiments stay in the workbench. Membership stays here.
           </p>
         </div>
-        <p className="userchip">api.tensorlane.ai</p>
+        <AuthHostChip />
       </section>
       <section className="auth-form">{children}</section>
     </div>

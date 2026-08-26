@@ -219,13 +219,26 @@ export async function listArtifacts(
   });
 }
 
+export const PROMPT_REGISTRY_FILTER = "tags.`mlflow.prompt.is_prompt` = 'true'";
+export const MODEL_REGISTRY_FILTER = "tags.`mlflow.prompt.is_prompt` != 'true'";
+
 export async function searchRegisteredModels(
   ctx: TrackingContext,
+  options?: { filter?: string; maxResults?: number },
 ): Promise<MlflowResult<{ registered_models?: RegisteredModel[] }>> {
-  return mlflowCall("/ajax-api/2.0/mlflow/registered-models/search?max_results=100", {
+  const params = new URLSearchParams();
+  params.set("max_results", String(options?.maxResults ?? 100));
+  if (options?.filter) params.set("filter", options.filter);
+  return mlflowCall(`/ajax-api/2.0/mlflow/registered-models/search?${params}`, {
     ...ctxInit(ctx),
     method: "GET",
   });
+}
+
+export async function searchPrompts(
+  ctx: TrackingContext,
+): Promise<MlflowResult<{ registered_models?: RegisteredModel[] }>> {
+  return searchRegisteredModels(ctx, { filter: PROMPT_REGISTRY_FILTER });
 }
 
 export async function searchLoggedModels(
@@ -270,26 +283,61 @@ export async function getTrace(
   ctx: TrackingContext,
   traceId: string,
 ): Promise<MlflowResult<{ trace?: { trace_info?: TraceInfo; spans?: TraceSpan[] } }>> {
-  const params = new URLSearchParams({ trace_id: traceId, allow_partial: "true" });
-  return mlflowCall(`/ajax-api/3.0/mlflow/traces/get?${params}`, {
+  return mlflowCall(`/ajax-api/3.0/mlflow/traces/${encodeURIComponent(traceId)}`, {
     ...ctxInit(ctx),
     method: "GET",
   });
+}
+
+function artifactLocationFromTrace(info: TraceInfo | undefined): string | null {
+  const tags = tagMap(info?.tags);
+  const location = tags["mlflow.artifactLocation"] || info?.trace_metadata?.["mlflow.artifactLocation"];
+  return location || null;
+}
+
+function tracesJsonPath(location: string): string {
+  const relative = location.replace(/^mlflow-artifacts:\/+/, "").replace(/^\/+/, "").replace(/\/+$/, "");
+  return relative.endsWith("traces.json") ? relative : `${relative}/traces.json`;
+}
+
+function spansFromPayload(data: unknown): TraceSpan[] {
+  if (!data) return [];
+  if (Array.isArray(data)) return data as TraceSpan[];
+  if (typeof data !== "object") return [];
+  const obj = data as { spans?: TraceSpan[]; data?: { spans?: TraceSpan[] } };
+  if (Array.isArray(obj.spans)) return obj.spans;
+  if (Array.isArray(obj.data?.spans)) return obj.data.spans;
+  return [];
 }
 
 export async function getTraceArtifact(
   ctx: TrackingContext,
   requestId: string,
 ): Promise<MlflowResult<{ spans?: TraceSpan[] }>> {
-  const result = await mlflowCall<{ spans?: TraceSpan[] }>(
+  const result = await mlflowCall<unknown>(
     `/ajax-api/2.0/mlflow/get-trace-artifact?request_id=${encodeURIComponent(requestId)}`,
     {
       ...ctxInit(ctx),
       method: "GET",
     },
   );
-  if (!result.ok) return result;
-  return { ok: true, data: { spans: (result.data.spans ?? []).map(normalizeTraceSpan) } };
+  if (result.ok) {
+    const spans = spansFromPayload(result.data).map(normalizeTraceSpan);
+    if (spans.length) return { ok: true, data: { spans } };
+  }
+  const info = await getTrace(ctx, requestId);
+  if (!info.ok) return result.ok ? { ok: true, data: { spans: [] } } : result;
+  const location = artifactLocationFromTrace(info.data.trace?.trace_info);
+  if (!location) return result.ok ? { ok: true, data: { spans: [] } } : result;
+  const file = await mlflowCall<unknown>(
+    `/api/2.0/mlflow-artifacts/artifacts/${tracesJsonPath(location)}`,
+    {
+      ...ctxInit(ctx),
+      method: "GET",
+    },
+  );
+  if (!file.ok) return result.ok ? { ok: true, data: { spans: [] } } : result;
+  return { ok: true, data: { spans: spansFromPayload(file.data).map(normalizeTraceSpan) } };
 }
 
 function decodeJsonish(value: unknown): unknown {

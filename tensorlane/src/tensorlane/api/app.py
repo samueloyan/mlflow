@@ -37,7 +37,14 @@ from tensorlane.errors import (
 )
 from tensorlane.ids import new_request_id
 from tensorlane.mlflow_admin import admin_from_settings
-from tensorlane.mlflow_paths import mlflow_upstream_path
+from tensorlane.mlflow_paths import (
+    is_get_trace_artifact,
+    is_mlflow_write,
+    is_trace_ingest,
+    mlflow_internal_url,
+    mlflow_upstream_path,
+    relative_trace_artifact_path,
+)
 from tensorlane.ratelimit import allow
 from tensorlane.seed import sync_workspaces
 from tensorlane.services import api_key_role, get_membership, usage_sum, workspace_by_mlflow_name
@@ -382,7 +389,7 @@ async def _proxy_mlflow(app: FastAPI, request: Request, path: str) -> Response:
     with session_scope() as session:
         principal = get_principal(request, session, settings, request.headers.get("authorization"))
         organization, workspace_row, role = _bind_workspace(session, principal, request)
-        action = "mlflow.read" if request.method in {"GET", "HEAD", "OPTIONS"} else "mlflow.write"
+        action = "mlflow.write" if is_mlflow_write(path, request.method) else "mlflow.read"
         authorize(
             role=role,
             action=action,
@@ -399,7 +406,7 @@ async def _proxy_mlflow(app: FastAPI, request: Request, path: str) -> Response:
                 1,
             )
             lowered = path.lower()
-            if "/traces" in lowered:
+            if is_trace_ingest(path, request.method):
                 entitlements.enforce(
                     "monthly_traces",
                     usage_sum(session, organization.id, "monthly_traces"),
@@ -464,9 +471,70 @@ async def _proxy_mlflow(app: FastAPI, request: Request, path: str) -> Response:
         content=body or None,
         params=request.query_params,
     )
+    if (
+        request.method == "GET"
+        and is_get_trace_artifact(path)
+        and upstream.status_code in {404, 500}
+    ):
+        fallback = await _workspace_scoped_trace_artifact(
+            client,
+            settings,
+            headers,
+            request.query_params.get("request_id"),
+            request.query_params.get("path"),
+        )
+        if fallback is not None:
+            return fallback
     response_headers = {k: v for k, v in upstream.headers.items() if k.lower() not in HOP_BY_HOP}
     return Response(
         content=upstream.content, status_code=upstream.status_code, headers=response_headers
+    )
+
+
+async def _workspace_scoped_trace_artifact(
+    client: httpx.AsyncClient,
+    settings: Settings,
+    headers: dict[str, str],
+    request_id: str | None,
+    attachment: str | None,
+) -> Response | None:
+    """Load traces.json via the workspace-aware artifact proxy when get-trace-artifact misses."""
+    if not request_id:
+        return None
+    info_url = mlflow_internal_url(
+        settings.mlflow_internal_uri,
+        settings.mlflow_static_prefix,
+        f"/ajax-api/3.0/mlflow/traces/{request_id}",
+    )
+    info = await client.get(info_url, headers=headers)
+    if info.status_code != 200:
+        return None
+    try:
+        payload = info.json()
+    except ValueError:
+        return None
+    tags = ((payload.get("trace") or {}).get("trace_info") or {}).get("tags") or {}
+    if isinstance(tags, list):
+        tags = {item.get("key"): item.get("value") for item in tags if item.get("key")}
+    location = tags.get("mlflow.artifactLocation") if isinstance(tags, dict) else None
+    if not isinstance(location, str):
+        return None
+    relative = relative_trace_artifact_path(location, attachment)
+    if not relative:
+        return None
+    download = mlflow_internal_url(
+        settings.mlflow_internal_uri,
+        settings.mlflow_static_prefix,
+        f"/api/2.0/mlflow-artifacts/artifacts/{relative}",
+    )
+    file_resp = await client.get(download, headers=headers)
+    if file_resp.status_code != 200:
+        return None
+    response_headers = {k: v for k, v in file_resp.headers.items() if k.lower() not in HOP_BY_HOP}
+    return Response(
+        content=file_resp.content,
+        status_code=200,
+        headers=response_headers,
     )
 
 
