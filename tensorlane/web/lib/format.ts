@@ -10,9 +10,50 @@ export function formatUsd(value: number | undefined): string {
   return value.toLocaleString(undefined, { style: "currency", currency: "USD" });
 }
 
-export function formatCount(value: number | undefined): string {
-  if (value === undefined || Number.isNaN(value)) return "—";
+export function formatCount(value: number | undefined | null): string {
+  if (value === undefined || value === null || Number.isNaN(value)) return "—";
   return value.toLocaleString();
+}
+
+export function formatMs(ms: number | null | undefined): string {
+  if (ms === null || ms === undefined || Number.isNaN(ms)) return "—";
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  const seconds = ms / 1000;
+  if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 2 : 1)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const rem = Math.round(seconds % 60);
+  if (minutes < 60) return `${minutes}m ${rem}s`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${minutes % 60}m`;
+}
+
+export function formatEpoch(ms: number | string | null | undefined): string {
+  if (ms === null || ms === undefined || ms === "") return "—";
+  const value = typeof ms === "string" ? Number(ms) : ms;
+  if (Number.isNaN(value) || value <= 0) return "—";
+  return formatDate(new Date(value).toISOString());
+}
+
+export function formatPercent(value: number | null | undefined, digits = 1): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  return `${value.toFixed(digits)}%`;
+}
+
+export function formatDurationBetween(
+  startMs: number | string | null | undefined,
+  endMs: number | string | null | undefined,
+): string {
+  const start = Number(startMs);
+  const end = Number(endMs);
+  if (!start || Number.isNaN(start)) return "—";
+  if (!end || Number.isNaN(end) || end < start) return "Running";
+  return formatMs(end - start);
+}
+
+export function shortId(value: string | null | undefined, size = 10): string {
+  if (!value) return "—";
+  if (value.length <= size + 1) return value;
+  return `${value.slice(0, size)}…`;
 }
 
 export async function copyText(value: string): Promise<boolean> {

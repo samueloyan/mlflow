@@ -5,34 +5,40 @@ import { useEffect, useMemo, useState } from "react";
 
 import { EmptyState, PageHeader } from "@/components/PageHeader";
 import { SavedViews } from "@/components/SavedViews";
-import { mlflowJson } from "@/lib/mlflow";
-import { useShell } from "@/lib/shell";
+import { useTrackingContext } from "@/lib/useTrackingContext";
+import { searchLoggedModels } from "@/lib/tracking";
 
-type Dataset = { name?: string; digest?: string; experiment_id?: string };
+type Row = { name: string; experimentId?: string; runId?: string };
 
 export default function EvaluationsPage() {
-  const { organization, workspace } = useShell();
+  const ctx = useTrackingContext();
   const [query, setQuery] = useState("");
-  const [rows, setRows] = useState<Dataset[] | null>(null);
+  const [rows, setRows] = useState<Row[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!organization || !workspace) return;
-    void mlflowJson<{ evaluation_datasets?: Dataset[]; datasets?: Dataset[] }>(
-      "/ajax-api/2.0/mlflow/logged-model/search",
-      {
-        method: "POST",
-        organizationId: organization.id,
-        workspaceId: workspace.id,
-        body: JSON.stringify({ max_results: 50 }),
-      },
-    ).then((payload) => setRows(payload?.evaluation_datasets ?? payload?.datasets ?? []));
-  }, [organization, workspace]);
+    if (!ctx) return;
+    void searchLoggedModels(ctx).then((result) => {
+      if (!result.ok) {
+        setError(result.message);
+        setRows([]);
+        return;
+      }
+      setRows(
+        (result.data.models ?? []).map((row) => ({
+          name: row.info?.name ?? "model",
+          experimentId: row.info?.experiment_id,
+          runId: row.info?.source_run_id,
+        })),
+      );
+    });
+  }, [ctx]);
 
   const filtered = useMemo(() => {
     const list = rows ?? [];
     const needle = query.trim().toLowerCase();
     if (!needle) return list;
-    return list.filter((row) => (row.name ?? "").toLowerCase().includes(needle));
+    return list.filter((row) => row.name.toLowerCase().includes(needle));
   }, [query, rows]);
 
   return (
@@ -40,27 +46,25 @@ export default function EvaluationsPage() {
       <PageHeader
         kicker="AI"
         title="Evaluations"
-        lede="Compare scorers and datasets that already live in MLflow. Advanced evaluation features follow the Growth and Enterprise plans."
+        lede="Create and run evaluations on your models and AI applications."
       >
-        <Link className="btn" href="/tracking">
+        <Link className="btn secondary" href="/tracking">
           Evaluation UI
         </Link>
       </PageHeader>
       <div className="grid">
         <div className="card span-8">
           <label className="field">
-            <span>Filter</span>
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Dataset or run name"
-            />
+            <span>Search</span>
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name" />
           </label>
           {rows === null ? (
             <p className="lede">Loading evaluations…</p>
+          ) : error ? (
+            <p className="lede">{error}</p>
           ) : filtered.length === 0 ? (
             <EmptyState
-              title="No evaluation datasets yet"
+              title="No evaluations yet"
               body="Run mlflow.genai.evaluate against this tracking URI. Side-by-side comparisons open in the workbench until native compare lands."
             />
           ) : (
@@ -68,25 +72,23 @@ export default function EvaluationsPage() {
               <thead>
                 <tr>
                   <th>Name</th>
-                  <th>Digest</th>
+                  <th>Target</th>
+                  <th>Source run</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((row) => (
-                  <tr key={`${row.name}-${row.digest}`}>
+                  <tr key={`${row.name}-${row.runId}`}>
                     <td>{row.name}</td>
-                    <td>{row.digest ?? "—"}</td>
+                    <td>{row.experimentId ?? "—"}</td>
+                    <td className="mono">{row.runId ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
         </div>
-        <SavedViews
-          surface="evaluations"
-          query={{ q: query }}
-          onApply={(next) => setQuery(String(next.q ?? ""))}
-        />
+        <SavedViews surface="evaluations" query={{ q: query }} onApply={(next) => setQuery(String(next.q ?? ""))} />
       </div>
     </div>
   );

@@ -1,7 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import type { ReactNode } from "react";
+
+export { EmptyState } from "@/components/ui/EmptyState";
+export { ErrorState } from "@/components/ui/EmptyState";
 
 export function PageHeader({
   kicker,
@@ -9,7 +11,7 @@ export function PageHeader({
   lede,
   children,
 }: {
-  kicker: string;
+  kicker?: string;
   title: string;
   lede?: string;
   children?: ReactNode;
@@ -17,29 +19,11 @@ export function PageHeader({
   return (
     <div className="page-header">
       <div>
-        <p className="kicker">{kicker}</p>
+        {kicker ? <p className="kicker">{kicker}</p> : null}
         <h1>{title}</h1>
         {lede ? <p className="lede">{lede}</p> : null}
       </div>
       {children ? <div className="page-actions">{children}</div> : null}
-    </div>
-  );
-}
-
-export function EmptyState({
-  title,
-  body,
-  action,
-}: {
-  title: string;
-  body: string;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="empty">
-      <h2>{title}</h2>
-      <p className="lede">{body}</p>
-      {action}
     </div>
   );
 }
@@ -52,14 +36,12 @@ export function PlanGate({
   body: string;
 }) {
   return (
-    <EmptyState
-      title={title ?? "Available on a higher plan"}
-      body={body}
-      action={
-        <Link className="btn" href="/billing">
-          Compare plans
-        </Link>
-      }
-    />
+    <div className="empty">
+      <h2>{title ?? "Available on a higher plan"}</h2>
+      <p className="lede">{body}</p>
+      <a className="btn" href="/billing">
+        Compare plans
+      </a>
+    </div>
   );
 }

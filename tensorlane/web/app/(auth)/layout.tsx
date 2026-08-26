@@ -4,11 +4,11 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="auth-shell">
       <section className="auth-story">
-        <Wordmark />
+        <Wordmark tone="light" />
         <div>
           <p className="kicker">MLflow compatible</p>
-          <h1 style={{ fontSize: 48, lineHeight: 1.05, maxWidth: 520 }}>
-            The control plane for serious AI work.
+          <h1 style={{ fontSize: 36, lineHeight: 1.15, maxWidth: 520 }}>
+            Serious infrastructure for serious AI teams.
           </h1>
           <p className="lede">
             Organizations, identity, isolation, and a tracking host the MLflow SDK already

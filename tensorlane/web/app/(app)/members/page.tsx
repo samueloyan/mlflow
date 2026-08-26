@@ -102,7 +102,7 @@ export default function MembersPage() {
   return (
     <div className="page">
       <PageHeader
-        kicker="Access"
+        kicker="Govern"
         title="Members"
         lede={
           organization?.workspace_acl === "restricted"

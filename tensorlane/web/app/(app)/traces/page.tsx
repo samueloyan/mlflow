@@ -1,99 +1,159 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
-import { EmptyState, PageHeader } from "@/components/PageHeader";
 import { SavedViews } from "@/components/SavedViews";
-import { mlflowJson } from "@/lib/mlflow";
-import { useShell } from "@/lib/shell";
+import { PageHeader } from "@/components/PageHeader";
+import { DataTable } from "@/components/ui/DataTable";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { formatDate, formatMs, shortId } from "@/lib/format";
+import { useTrackingContext } from "@/lib/useTrackingContext";
+import {
+  parseDurationMs,
+  searchExperiments,
+  searchTraces,
+  tagMap,
+  traceStatus,
+  type TraceInfo,
+} from "@/lib/tracking";
 
-type Trace = { request_id?: string; trace_id?: string; name?: string; status?: string; timestamp_ms?: number };
+function TracesInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const ctx = useTrackingContext();
+  const [query, setQuery] = useState(searchParams.get("q") ?? "");
+  const [status, setStatus] = useState(searchParams.get("status") ?? "all");
+  const [rows, setRows] = useState<TraceInfo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-export default function TracesPage() {
-  const { organization, workspace } = useShell();
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
-  const [rows, setRows] = useState<Trace[] | null>(null);
+  async function load() {
+    if (!ctx) return;
+    setLoading(true);
+    setError(null);
+    const experiments = await searchExperiments(ctx);
+    if (!experiments.ok) {
+      setError(experiments.message);
+      setLoading(false);
+      return;
+    }
+    const ids = (experiments.data.experiments ?? [])
+      .map((row) => row.experiment_id)
+      .filter((id): id is string => Boolean(id));
+    const traces = await searchTraces(ctx, ids, { maxResults: 100 });
+    if (!traces.ok) {
+      setError(traces.message);
+      setLoading(false);
+      return;
+    }
+    setRows(traces.data.traces ?? []);
+    setLoading(false);
+  }
 
   useEffect(() => {
-    if (!organization || !workspace) return;
-    void mlflowJson<{ traces?: Trace[] }>("/ajax-api/3.0/mlflow/traces/search", {
-      method: "POST",
-      organizationId: organization.id,
-      workspaceId: workspace.id,
-      body: JSON.stringify({ max_results: 100 }),
-    }).then((payload) => setRows(payload?.traces ?? []));
-  }, [organization, workspace]);
+    void load();
+  }, [ctx]);
 
   const filtered = useMemo(() => {
-    const list = rows ?? [];
-    return list.filter((row) => {
-      const hay = `${row.name ?? ""} ${row.trace_id ?? ""} ${row.request_id ?? ""}`.toLowerCase();
-      if (query && !hay.includes(query.toLowerCase())) return false;
-      if (status !== "all" && (row.status ?? "").toLowerCase() !== status) return false;
-      return true;
+    return rows.filter((row) => {
+      const state = traceStatus(row).toUpperCase();
+      if (status === "ok" && state !== "OK" && state !== "SUCCESS") return false;
+      if (status === "error" && state !== "ERROR" && state !== "FAILED") return false;
+      const needle = query.trim().toLowerCase();
+      if (!needle) return true;
+      const tags = tagMap(row.tags);
+      const hay = `${row.trace_id ?? ""} ${row.request_id ?? ""} ${row.name ?? ""} ${JSON.stringify(tags)} ${JSON.stringify(row.trace_metadata ?? {})}`;
+      return hay.toLowerCase().includes(needle);
     });
   }, [query, rows, status]);
 
   return (
     <div className="page">
-      <PageHeader
-        kicker="AI"
-        title="Traces"
-        lede="Inspect LLM and agent traces without leaving Tensorlane chrome. Filters stay on this side; spans live in MLflow."
-      >
-        <Link className="btn" href="/tracking">
-          Trace explorer
-        </Link>
-      </PageHeader>
+      <PageHeader kicker="AI" title="Traces" lede="Observe and debug your AI applications." />
       <div className="grid">
-        <div className="card span-8">
-          <div className="grid" style={{ gridTemplateColumns: "1fr 180px", gap: 12 }}>
-            <label className="field">
-              <span>Search</span>
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Name or trace id"
-              />
-            </label>
-            <label className="field">
-              <span>Status</span>
-              <select value={status} onChange={(event) => setStatus(event.target.value)}>
-                <option value="all">All</option>
-                <option value="ok">OK</option>
-                <option value="error">Error</option>
-              </select>
-            </label>
-          </div>
-          {rows === null ? (
-            <p className="lede">Loading traces…</p>
-          ) : filtered.length === 0 ? (
-            <EmptyState
-              title="No traces yet"
-              body="Instrument with mlflow.trace or an OpenTelemetry exporter pointed at this host. Search and saved views will apply as soon as spans arrive."
+        <div className="span-9">
+          <div className="card">
+            <DataTable
+              columns={[
+                {
+                  id: "id",
+                  header: "Trace ID",
+                  cell: (row) => <span className="mono">{shortId(row.trace_id || row.request_id, 14)}</span>,
+                },
+                { id: "name", header: "Name", cell: (row) => row.name || tagMap(row.tags)["mlflow.traceName"] || "trace" },
+                {
+                  id: "application",
+                  header: "Application",
+                  cell: (row) => row.trace_metadata?.["mlflow.source.name"] || tagMap(row.tags).application || "—",
+                },
+                {
+                  id: "model",
+                  header: "Model",
+                  cell: (row) => row.trace_metadata?.["mlflow.trace.model"] || tagMap(row.tags).model || "—",
+                },
+                {
+                  id: "duration",
+                  header: "Duration",
+                  cell: (row) => row.execution_duration || formatMs(parseDurationMs(row.execution_time_ms ?? undefined) ?? undefined),
+                },
+                {
+                  id: "tokens",
+                  header: "Tokens",
+                  cell: (row) =>
+                    row.trace_metadata?.["mlflow.trace.tokenUsage"] ||
+                    tagMap(row.tags)["mlflow.trace.tokenUsage"] ||
+                    "—",
+                },
+                {
+                  id: "cost",
+                  header: "Cost",
+                  cell: (row) => tagMap(row.tags).cost || row.trace_metadata?.cost || "—",
+                },
+                {
+                  id: "status",
+                  header: "Status",
+                  cell: (row) => {
+                    const label = traceStatus(row);
+                    const tone = label === "OK" || label === "SUCCESS" ? "success" : label === "ERROR" ? "danger" : "neutral";
+                    return <StatusBadge label={label} tone={tone} />;
+                  },
+                },
+                {
+                  id: "time",
+                  header: "Time",
+                  cell: (row) =>
+                    row.request_time
+                      ? formatDate(row.request_time)
+                      : row.timestamp_ms
+                        ? formatDate(new Date(Number(row.timestamp_ms)).toISOString())
+                        : "—",
+                },
+              ]}
+              rows={filtered}
+              rowKey={(row) => row.trace_id || row.request_id || "trace"}
+              loading={loading}
+              error={error}
+              onRetry={() => void load()}
+              searchable
+              search={query}
+              onSearch={setQuery}
+              searchPlaceholder="Search name or trace id"
+              filters={
+                <select className="quiet" value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Status">
+                  <option value="all">All statuses</option>
+                  <option value="ok">OK</option>
+                  <option value="error">Error</option>
+                </select>
+              }
+              emptyTitle="No traces yet"
+              emptyBody="Instrument with mlflow.trace or an OpenTelemetry exporter pointed at this host."
+              onRowClick={(row) => {
+                const id = row.trace_id || row.request_id;
+                if (id) router.push(`/traces/${id}`);
+              }}
             />
-          ) : (
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Trace</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((row) => (
-                  <tr key={row.trace_id ?? row.request_id}>
-                    <td>{row.name ?? "trace"}</td>
-                    <td>{row.trace_id ?? row.request_id}</td>
-                    <td>{row.status ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+          </div>
         </div>
         <SavedViews
           surface="traces"
@@ -105,5 +165,13 @@ export default function TracesPage() {
         />
       </div>
     </div>
+  );
+}
+
+export default function TracesPage() {
+  return (
+    <Suspense fallback={<div className="page">Loading traces…</div>}>
+      <TracesInner />
+    </Suspense>
   );
 }

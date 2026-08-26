@@ -1,6 +1,7 @@
 export type NavItem = {
   href: string;
   label: string;
+  icon: string;
   roles?: readonly string[];
   feature?: string;
 };
@@ -11,58 +12,75 @@ export type NavGroup = {
 };
 
 const ALL_ROLES = ["owner", "admin", "developer", "viewer", "billing"] as const;
+const BUILD_ROLES = ["owner", "admin", "developer", "viewer"] as const;
+const KEY_ROLES = ["owner", "admin", "developer"] as const;
+const ADMIN_ROLES = ["owner", "admin"] as const;
+const BILLING_ROLES = ["owner", "admin", "billing", "developer"] as const;
+const BILLING_ONLY = ["owner", "billing"] as const;
 
 export const NAV: NavGroup[] = [
-  { label: "", items: [{ href: "/overview", label: "Overview" }] },
+  { label: "Overview", items: [{ href: "/overview", label: "Overview", icon: "overview" }] },
   {
     label: "Build",
     items: [
-      { href: "/experiments", label: "Experiments", roles: ["owner", "admin", "developer", "viewer"] },
-      { href: "/tracking", label: "Workbench", roles: ["owner", "admin", "developer", "viewer"] },
+      { href: "/experiments", label: "Experiments", icon: "experiments", roles: BUILD_ROLES },
+      { href: "/runs", label: "Runs", icon: "runs", roles: BUILD_ROLES },
+      { href: "/models", label: "Models", icon: "models", roles: BUILD_ROLES },
+      { href: "/datasets", label: "Datasets", icon: "datasets", roles: BUILD_ROLES },
     ],
   },
   {
     label: "AI",
     items: [
-      { href: "/traces", label: "Traces", roles: ["owner", "admin", "developer", "viewer"] },
-      { href: "/prompts", label: "Prompts", roles: ["owner", "admin", "developer", "viewer"] },
-      { href: "/evaluations", label: "Evaluations", roles: ["owner", "admin", "developer", "viewer"] },
+      { href: "/traces", label: "Traces", icon: "traces", roles: BUILD_ROLES },
+      { href: "/evaluations", label: "Evaluations", icon: "evaluations", roles: BUILD_ROLES },
+      { href: "/prompts", label: "Prompts", icon: "prompts", roles: BUILD_ROLES },
     ],
   },
   {
     label: "Operate",
     items: [
-      {
-        href: "/approvals",
-        label: "Approvals",
-        roles: ["owner", "admin", "developer", "viewer"],
-        feature: "approvals",
-      },
+      { href: "/deployments", label: "Deployments", icon: "deployments", roles: BUILD_ROLES },
       {
         href: "/monitoring",
         label: "Monitoring",
-        roles: ["owner", "admin", "developer", "viewer", "billing"],
+        icon: "monitoring",
+        roles: [...BUILD_ROLES, "billing"],
         feature: "quality_monitoring",
       },
+      { href: "/alerts", label: "Alerts", icon: "alerts", roles: [...BUILD_ROLES, "billing"] },
+      { href: "/reports", label: "Reports", icon: "reports", roles: [...BUILD_ROLES, "billing"] },
+      { href: "/tracking", label: "Workbench", icon: "workbench", roles: BUILD_ROLES },
     ],
   },
   {
-    label: "Manage",
+    label: "Govern",
     items: [
-      { href: "/members", label: "Members", roles: ["owner", "admin", "developer", "viewer"] },
-      { href: "/keys", label: "Keys", roles: ["owner", "admin", "developer"] },
-      { href: "/usage", label: "Usage", roles: ["owner", "admin", "billing", "developer"] },
-      { href: "/cost", label: "Cost", roles: ["owner", "admin", "billing", "developer"] },
-      { href: "/billing", label: "Billing", roles: ["owner", "billing"] },
-      { href: "/audit", label: "Audit", roles: ["owner", "admin"] },
-      { href: "/security", label: "Security", roles: ["owner", "admin"] },
-      { href: "/retention", label: "Retention", roles: ["owner", "admin"] },
-      { href: "/settings", label: "Settings", roles: ["owner", "admin"] },
+      { href: "/workspaces", label: "Workspaces", icon: "workspaces", roles: BUILD_ROLES },
+      { href: "/members", label: "Members", icon: "members", roles: BUILD_ROLES },
+      { href: "/api-keys", label: "API Keys", icon: "keys", roles: KEY_ROLES },
+      { href: "/integrations", label: "Integrations", icon: "integrations", roles: ADMIN_ROLES },
+      { href: "/usage", label: "Usage", icon: "usage", roles: BILLING_ROLES },
+      { href: "/cost", label: "Cost", icon: "cost", roles: BILLING_ROLES },
+      { href: "/billing", label: "Billing", icon: "billing", roles: BILLING_ONLY },
+      { href: "/audit", label: "Audit Logs", icon: "audit", roles: ADMIN_ROLES },
+      {
+        href: "/approvals",
+        label: "Approvals",
+        icon: "approvals",
+        roles: BUILD_ROLES,
+        feature: "approvals",
+      },
+      { href: "/security", label: "Security", icon: "security", roles: ADMIN_ROLES },
+      { href: "/retention", label: "Retention", icon: "retention", roles: ADMIN_ROLES },
+      { href: "/settings", label: "Settings", icon: "settings", roles: ADMIN_ROLES },
     ],
   },
 ];
 
 export function isActivePath(pathname: string, href: string): boolean {
+  if (href === "/overview") return pathname === href;
+  if (href === "/runs") return pathname === "/runs" || pathname.startsWith("/runs/");
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -79,4 +97,14 @@ export function visibleNav(
       return true;
     }),
   })).filter((group) => group.items.length > 0);
+}
+
+export function pageTitle(pathname: string): string {
+  const items = NAV.flatMap((group) => group.items);
+  const exact = items.find((item) => pathname === item.href);
+  if (exact) return exact.label;
+  const nested = items
+    .filter((item) => item.href !== "/overview" && pathname.startsWith(`${item.href}/`))
+    .sort((a, b) => b.href.length - a.href.length)[0];
+  return nested?.label ?? "Tensorlane";
 }

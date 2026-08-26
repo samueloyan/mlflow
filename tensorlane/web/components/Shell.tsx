@@ -5,9 +5,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { UsageBanner } from "@/components/UsageBanner";
-import { Wordmark } from "@/components/Wordmark";
+import { CommandPalette } from "@/components/shell/CommandPalette";
+import { Header } from "@/components/shell/Header";
+import { Sidebar } from "@/components/shell/Sidebar";
+import { ToastProvider } from "@/components/ui/Toast";
 import { api, type Me, type Organization, type Workspace } from "@/lib/api";
-import { isActivePath, visibleNav } from "@/lib/nav";
+import { visibleNav } from "@/lib/nav";
 import { ShellContext } from "@/lib/shell";
 
 export function Shell({ children }: { children: React.ReactNode }) {
@@ -21,8 +24,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const [navOpen, setNavOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   const refresh = useCallback(() => setTick((value) => value + 1), []);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem("tensorlane.sidebar.collapsed");
+    setCollapsed(stored === "1");
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,7 +95,19 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setNavOpen(false);
+    setPaletteOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen((open) => !open);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const organization = organizations.find((org) => org.id === organizationId) ?? null;
   const workspace = workspaces.find((row) => row.id === workspaceId) ?? null;
@@ -129,92 +151,32 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   return (
     <ShellContext.Provider value={value}>
-      <a className="skip-link" href="#main">
-        Skip to content
-      </a>
-      <div className="app-frame">
-        <aside className="sidebar" data-open={navOpen}>
-          <div className="sidebar-brand">
-            <Wordmark />
-            <button
-              type="button"
-              className="nav-toggle"
-              aria-expanded={navOpen}
-              aria-controls="primary-nav"
-              onClick={() => setNavOpen((open) => !open)}
-            >
-              Menu
-            </button>
+      <ToastProvider>
+        <a className="skip-link" href="#main">
+          Skip to content
+        </a>
+        <div className="app-frame" data-collapsed={collapsed}>
+          <Sidebar
+            navigation={navigation}
+            collapsed={collapsed}
+            onToggleCollapsed={() => {
+              setCollapsed((value) => {
+                const next = !value;
+                window.localStorage.setItem("tensorlane.sidebar.collapsed", next ? "1" : "0");
+                return next;
+              });
+            }}
+            mobileOpen={navOpen}
+            onMobileToggle={() => setNavOpen((open) => !open)}
+          />
+          <div className="main-col">
+            <Header onSearch={() => setPaletteOpen(true)} />
+            {organization ? <UsageBanner /> : null}
+            <main id="main">{children}</main>
           </div>
-          <div className="sidebar-context">
-            {organization ? (
-              <label className="field">
-                <span>Organization</span>
-                <select
-                  className="quiet"
-                  value={organization.id}
-                  onChange={(event) => setOrganizationId(event.target.value)}
-                  aria-label="Organization"
-                >
-                  {organizations.map((org) => (
-                    <option key={org.id} value={org.id}>
-                      {org.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-            {workspace ? (
-              <label className="field">
-                <span>Workspace</span>
-                <select
-                  className="quiet"
-                  value={workspace.id}
-                  onChange={(event) => setWorkspaceId(event.target.value)}
-                  aria-label="Workspace"
-                >
-                  {workspaces.map((row) => (
-                    <option key={row.id} value={row.id}>
-                      {row.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-          </div>
-          <nav id="primary-nav" className="sidebar-nav" aria-label="Primary">
-            {navigation.map((group) => (
-              <div key={group.label || "root"} className="nav-group">
-                {group.label ? <p className="nav-label">{group.label}</p> : null}
-                {group.items.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    data-active={isActivePath(pathname, link.href)}
-                  >
-                    {link.label}
-                  </Link>
-                ))}
-              </div>
-            ))}
-          </nav>
-          <div className="sidebar-foot">
-            <span className="userchip">{me?.email}</span>
-            {organization ? (
-              <span className="plan-chip">{organization.plan}</span>
-            ) : null}
-            <form action="/api/logout" method="post">
-              <button type="submit" className="btn secondary">
-                Sign out
-              </button>
-            </form>
-          </div>
-        </aside>
-        <div className="main-col" id="main">
-          {organization ? <UsageBanner /> : null}
-          {children}
         </div>
-      </div>
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} navigation={navigation} />
+      </ToastProvider>
     </ShellContext.Provider>
   );
 }

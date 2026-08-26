@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { CodeBlock } from "@/components/ui/CodeBlock";
 import { api, type Organization } from "@/lib/api";
 
 export default function OnboardingPage() {
@@ -52,6 +53,19 @@ export default function OnboardingPage() {
           Continue
         </button>
       </form>
+      <div className="card" style={{ maxWidth: 640, marginTop: 24 }}>
+        <p className="kicker">Install MLflow</p>
+        <CodeBlock
+          value={`import mlflow
+
+mlflow.set_tracking_uri("https://api.tensorlane.ai")
+
+with mlflow.start_run():
+    mlflow.log_param("model", "gpt-4o")
+    mlflow.log_metric("score", 0.94)`}
+          label="Copy snippet"
+        />
+      </div>
     </div>
   );
 }
