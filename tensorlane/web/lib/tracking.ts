@@ -232,6 +232,9 @@ export async function searchLoggedModels(
   ctx: TrackingContext,
   experimentIds?: string[],
 ): Promise<MlflowResult<{ models?: { info?: { name?: string; experiment_id?: string; source_run_id?: string } }[] }>> {
+  if (!experimentIds || experimentIds.length === 0) {
+    return { ok: true, data: { models: [] } };
+  }
   return mlflowCall("/ajax-api/2.0/mlflow/logged-models/search", {
     ...ctxInit(ctx),
     method: "POST",

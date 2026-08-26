@@ -7,7 +7,7 @@ import { EmptyState, PageHeader } from "@/components/PageHeader";
 import { ErrorState } from "@/components/ui/EmptyState";
 import { SavedViews } from "@/components/SavedViews";
 import { useTrackingContext } from "@/lib/useTrackingContext";
-import { searchLoggedModels } from "@/lib/tracking";
+import { searchExperiments, searchLoggedModels } from "@/lib/tracking";
 
 type Row = { name: string; experimentId?: string; runId?: string };
 
@@ -22,7 +22,16 @@ export default function EvaluationsPage() {
     if (!ctx) return;
     setLoading(true);
     setError(null);
-    const result = await searchLoggedModels(ctx);
+    const experiments = await searchExperiments(ctx);
+    if (!experiments.ok) {
+      setError(experiments.message);
+      setLoading(false);
+      return;
+    }
+    const ids = (experiments.data.experiments ?? [])
+      .map((row) => row.experiment_id)
+      .filter((id): id is string => Boolean(id));
+    const result = await searchLoggedModels(ctx, ids);
     if (!result.ok) {
       setError(result.message);
       setLoading(false);
