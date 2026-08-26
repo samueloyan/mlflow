@@ -10,11 +10,13 @@ import uvicorn
 from fastapi.testclient import TestClient
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route
 from tensorlane.api.app import create_app
 from tensorlane.config import Settings
+from tensorlane.db.models import Workspace
 from tensorlane.db.session import session_factory
+from tensorlane.ids import WORKSPACE_PREFIX, new_id, to_mlflow_workspace_name
 from tensorlane.seed import create_org_with_owner, create_session_token, create_user
 
 captured: dict[str, Any] = {}
@@ -181,6 +183,62 @@ def test_gateway_prefixes_mlflow_routes_for_static_prefix(tmp_path):
         assert allowed.json()["experiment_id"] == "7"
         assert captured["path"] == "/mlflow/api/2.0/mlflow/experiments/create"
         assert captured["workspace"] == workspace.mlflow_workspace_name
+    finally:
+        server.should_exit = True
+
+
+def test_session_workspace_cookie_binds_iframe_when_org_has_two_workspaces(tmp_path):
+    captured.clear()
+    port = _free_port()
+
+    async def workbench(request: Request) -> HTMLResponse:
+        captured["path"] = request.url.path
+        captured["workspace"] = request.headers.get("x-mlflow-workspace")
+        return HTMLResponse("<html>workbench</html>")
+
+    starlette_app = Starlette(routes=[Route("/mlflow/", workbench, methods=["GET"])])
+    config = uvicorn.Config(starlette_app, host="127.0.0.1", port=port, log_level="error")
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    _wait_for_port(port)
+    try:
+        settings = Settings(
+            database_url=f"sqlite:///{tmp_path}/tensorlane.db",
+            mlflow_internal_uri=f"http://127.0.0.1:{port}",
+            mlflow_static_prefix="/mlflow",
+            tensorlane_pepper="test-pepper",
+            artifact_root="file:///tmp/tensorlane-artifacts",
+            control_plane_rpm=0,
+            mlflow_write_rpm=0,
+        )
+        app = create_app(settings)
+        with TestClient(app) as client:
+            db = session_factory()()
+            alice = create_user(db, "alice@acme.test", "Alice")
+            create_session_token(db, alice, "alice-session")
+            acme, production = create_org_with_owner(db, alice, "Acme")
+            staging_id = new_id(WORKSPACE_PREFIX)
+            db.add(
+                Workspace(
+                    id=staging_id,
+                    organization_id=acme.id,
+                    name="Staging",
+                    slug="staging",
+                    mlflow_workspace_name=to_mlflow_workspace_name(staging_id),
+                    artifact_root=f"file:///tmp/tensorlane-artifacts/org/{acme.id}/workspace/{staging_id}",
+                )
+            )
+            db.commit()
+            missing = client.get("/mlflow/", headers={"Authorization": "Bearer alice-session"})
+            assert missing.status_code == 400, missing.text
+            assert missing.json()["error"]["code"] == "WORKSPACE_REQUIRED"
+            client.cookies.set("tensorlane.workspace", production.id)
+            allowed = client.get("/mlflow/", headers={"Authorization": "Bearer alice-session"})
+            db.close()
+        assert allowed.status_code == 200, allowed.text
+        assert b"workbench" in allowed.content
+        assert captured["workspace"] == production.mlflow_workspace_name
     finally:
         server.should_exit = True
 

@@ -236,6 +236,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     return app
 
 
+ORG_COOKIE = "tensorlane.organization"
+WORKSPACE_COOKIE = "tensorlane.workspace"
+
+
+def _cookie(request: Request, name: str) -> str | None:
+    value = request.cookies.get(name)
+    if not value:
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
 def _bind_workspace(
     session, principal: Principal, request: Request
 ) -> tuple[Organization, Workspace, str]:
@@ -245,6 +257,9 @@ def _bind_workspace(
         org_id = principal.api_key.organization_id
         if principal.api_key.workspace_id:
             workspace_id = principal.api_key.workspace_id
+    else:
+        org_id = org_id or _cookie(request, ORG_COOKIE)
+        workspace_id = workspace_id or _cookie(request, WORKSPACE_COOKIE)
 
     if not org_id and principal.user_id:
         membership = session.scalar(

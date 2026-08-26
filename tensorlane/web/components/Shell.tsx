@@ -12,6 +12,7 @@ import { ToastProvider } from "@/components/ui/Toast";
 import { api, type Me, type Organization, type Workspace } from "@/lib/api";
 import { visibleNav } from "@/lib/nav";
 import { ShellContext } from "@/lib/shell";
+import { persistTenantCookies } from "@/lib/tenantCookies";
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -90,8 +91,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (workspaceId) {
       window.localStorage.setItem("tensorlane.workspace", workspaceId);
+      persistTenantCookies(organizationId, workspaceId);
     }
-  }, [workspaceId]);
+  }, [organizationId, workspaceId]);
 
   useEffect(() => {
     setNavOpen(false);
