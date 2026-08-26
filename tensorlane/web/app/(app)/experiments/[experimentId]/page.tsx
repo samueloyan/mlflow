@@ -53,6 +53,7 @@ function ExperimentDetailsInner() {
   const [models, setModels] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     if (!ctx || !experimentId) return;
@@ -86,7 +87,7 @@ function ExperimentDetailsInner() {
     return () => {
       cancelled = true;
     };
-  }, [ctx, experimentId]);
+  }, [ctx, experimentId, reload]);
 
   const finished = runs.filter((run) => (run.info?.status ?? "").toUpperCase() === "FINISHED");
   const successRate = runs.length ? (finished.length / runs.length) * 100 : 0;
@@ -112,7 +113,7 @@ function ExperimentDetailsInner() {
   if (error) {
     return (
       <div className="page">
-        <ErrorState title="Unable to load experiment" body={error} />
+        <ErrorState title="Unable to load experiment" body={error} onRetry={() => setReload((value) => value + 1)} />
       </div>
     );
   }
@@ -146,7 +147,16 @@ function ExperimentDetailsInner() {
               <MetricCard label="Best metric" value={<span style={{ fontSize: 16 }}>{best}</span>} />
             </div>
             <div className="span-3">
+              <MetricCard label="Models produced" value={formatCount(models.length)} />
+            </div>
+            <div className="span-3">
               <MetricCard label="Trace volume" value={formatCount(traces.length)} />
+            </div>
+            <div className="span-3">
+              <MetricCard
+                label="Last activity"
+                value={<span style={{ fontSize: 16 }}>{formatEpoch(experiment?.last_update_time)}</span>}
+              />
             </div>
             <div className="span-8">
               <ChartCard title="Run performance over time">

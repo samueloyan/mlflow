@@ -9,6 +9,7 @@ import { DataTable } from "@/components/ui/DataTable";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { formatDurationBetween, formatEpoch } from "@/lib/format";
 import { useTrackingContext } from "@/lib/useTrackingContext";
+import { useSyncedSearchParams } from "@/lib/useSyncedSearchParams";
 import {
   metricMap,
   runId,
@@ -34,6 +35,7 @@ function RunsInner() {
   const [selected, setSelected] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  useSyncedSearchParams({ q: query, status, experiment: experimentFilter });
 
   async function load() {
     if (!ctx) return;

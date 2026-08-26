@@ -60,7 +60,10 @@ export function DataTable<T>({
 }) {
   const [sort, setSort] = useState<{ id: string; dir: "asc" | "desc" } | null>(null);
   const [page, setPage] = useState(0);
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [columnsOpen, setColumnsOpen] = useState(false);
   const selectedSet = new Set(selected ?? []);
+  const visibleColumns = columns.filter((column) => !hidden.has(column.id));
 
   const sorted = useMemo(() => {
     if (!sort) return rows;
@@ -105,7 +108,7 @@ export function DataTable<T>({
 
   return (
     <div>
-      {(searchable || filters || (selectable && selected && selected.length > 0)) && (
+      {(searchable || filters || columns.length > 2 || (selectable && selected && selected.length > 0)) && (
         <div className="toolbar">
           {searchable ? (
             <label className="field grow" style={{ marginBottom: 0 }}>
@@ -124,11 +127,46 @@ export function DataTable<T>({
             </label>
           ) : null}
           {filters}
+          <div className="column-picker">
+            <button
+              type="button"
+              className="btn secondary"
+              aria-expanded={columnsOpen}
+              onClick={() => setColumnsOpen((open) => !open)}
+            >
+              Columns
+            </button>
+            {columnsOpen ? (
+              <div className="column-picker-menu" role="menu" aria-label="Visible columns">
+                {columns.map((column) => {
+                  const checked = !hidden.has(column.id);
+                  return (
+                    <label key={column.id}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={checked && visibleColumns.length === 1}
+                        onChange={() => {
+                          setHidden((current) => {
+                            const next = new Set(current);
+                            if (next.has(column.id)) next.delete(column.id);
+                            else if (next.size < columns.length - 1) next.add(column.id);
+                            return next;
+                          });
+                        }}
+                      />
+                      {column.header}
+                    </label>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
           {selectable && selected && selected.length > 0 ? bulkActions : null}
         </div>
       )}
       {loading ? (
-        <TableSkeleton cols={columns.length + (selectable ? 1 : 0)} />
+        <TableSkeleton cols={visibleColumns.length + (selectable ? 1 : 0)} />
       ) : error ? (
         <ErrorState title="Unable to load this table" body={error} onRetry={onRetry} />
       ) : rows.length === 0 ? (
@@ -149,7 +187,7 @@ export function DataTable<T>({
                       />
                     </th>
                   ) : null}
-                  {columns.map((column) => (
+                  {visibleColumns.map((column) => (
                     <th key={column.id} style={column.width ? { width: column.width } : undefined}>
                       {column.sortValue ? (
                         <button type="button" className="btn ghost" style={{ padding: 0 }} onClick={() => toggleSort(column.id)}>
@@ -187,7 +225,7 @@ export function DataTable<T>({
                           />
                         </td>
                       ) : null}
-                      {columns.map((column) => (
+                      {visibleColumns.map((column) => (
                         <td key={column.id}>{column.cell(row)}</td>
                       ))}
                     </tr>

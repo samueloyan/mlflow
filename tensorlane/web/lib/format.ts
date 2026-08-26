@@ -56,6 +56,28 @@ export function shortId(value: string | null | undefined, size = 10): string {
   return `${value.slice(0, size)}…`;
 }
 
+export function periodDelta(series: { value: number }[]): {
+  value: string;
+  direction: "up" | "down" | "flat";
+} {
+  if (series.length < 2) {
+    return { value: "0% vs prior period", direction: "flat" };
+  }
+  const mid = Math.ceil(series.length / 2);
+  const previous = series.slice(0, mid).reduce((sum, row) => sum + row.value, 0);
+  const current = series.slice(mid).reduce((sum, row) => sum + row.value, 0);
+  if (previous === 0 && current === 0) {
+    return { value: "0% vs prior period", direction: "flat" };
+  }
+  if (previous === 0) {
+    return { value: "+100% vs prior period", direction: "up" };
+  }
+  const pct = ((current - previous) / previous) * 100;
+  const direction = pct > 0.5 ? "up" : pct < -0.5 ? "down" : "flat";
+  const sign = pct > 0 ? "+" : "";
+  return { value: `${sign}${Math.round(pct)}% vs prior period`, direction };
+}
+
 export async function copyText(value: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(value);

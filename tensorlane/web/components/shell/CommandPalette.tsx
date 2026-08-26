@@ -54,8 +54,36 @@ export function CommandPalette({
       hint: "Context",
       run: () => setWorkspaceId(workspace.id),
     }));
-    return [...nav, ...actions, ...switches];
-  }, [navigation, role, router, setWorkspaceId, workspaces]);
+    const searches: Command[] = query.trim()
+      ? [
+          {
+            id: "search-experiments",
+            label: `Search experiments for “${query.trim()}”`,
+            hint: "Search",
+            run: () => router.push(`/experiments?q=${encodeURIComponent(query.trim())}`),
+          },
+          {
+            id: "search-runs",
+            label: `Search runs for “${query.trim()}”`,
+            hint: "Search",
+            run: () => router.push(`/runs?q=${encodeURIComponent(query.trim())}`),
+          },
+          {
+            id: "search-traces",
+            label: `Search traces for “${query.trim()}”`,
+            hint: "Search",
+            run: () => router.push(`/traces?q=${encodeURIComponent(query.trim())}`),
+          },
+          {
+            id: "search-models",
+            label: `Search models for “${query.trim()}”`,
+            hint: "Search",
+            run: () => router.push(`/models?q=${encodeURIComponent(query.trim())}`),
+          },
+        ]
+      : [];
+    return [...searches, ...nav, ...actions, ...switches];
+  }, [navigation, query, role, router, setWorkspaceId, workspaces]);
 
   const filtered = commands.filter((command) => {
     const hay = `${command.label} ${command.hint ?? ""}`.toLowerCase();

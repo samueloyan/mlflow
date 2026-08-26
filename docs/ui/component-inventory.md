@@ -33,12 +33,14 @@ All new primitives live under `tensorlane/web/components/ui/` unless noted. Page
 | DataTable | `components/ui/DataTable.tsx` |
 | StatusBadge | `components/ui/StatusBadge.tsx` |
 | MetricCard | `components/ui/MetricCard.tsx` |
-| ChartCard | `components/ui/ChartCard.tsx` |
+| ChartCard | `components/ui/Charts.tsx` |
 | Sparkline / LineChart / BarChart | `components/ui/Charts.tsx` (SVG, no chart package) |
 | ActivityFeed | `components/ui/ActivityFeed.tsx` |
 | UsageMeter | CSS `.meter` |
 | Pagination | inside DataTable |
-| FilterBar / SearchInput | `components/ui/FilterBar.tsx` |
+| Column visibility | inside DataTable (`Columns`) |
+| FilterBar / SearchInput | DataTable toolbar |
+| QuickStart | `components/QuickStart.tsx` |
 | CodeBlock + CopyButton | `components/ui/CodeBlock.tsx`, `components/CopyButton.tsx` |
 | Tabs | `components/ui/Tabs.tsx` |
 
@@ -47,7 +49,7 @@ All new primitives live under `tensorlane/web/components/ui/` unless noted. Page
 | Component | File |
 | --- | --- |
 | Modal | `components/ui/Modal.tsx` |
-| Drawer | `components/ui/Drawer.tsx` |
+| Drawer | `components/ui/Modal.tsx` (`Drawer`) |
 | Toast + provider | `components/ui/Toast.tsx` |
 | ConfirmDialog | Modal variant |
 

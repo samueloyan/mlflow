@@ -9,6 +9,7 @@ import { DataTable } from "@/components/ui/DataTable";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { formatDate, formatMs, shortId } from "@/lib/format";
 import { useTrackingContext } from "@/lib/useTrackingContext";
+import { useSyncedSearchParams } from "@/lib/useSyncedSearchParams";
 import {
   parseDurationMs,
   searchExperiments,
@@ -24,9 +25,12 @@ function TracesInner() {
   const ctx = useTrackingContext();
   const [query, setQuery] = useState(searchParams.get("q") ?? "");
   const [status, setStatus] = useState(searchParams.get("status") ?? "all");
+  const [application, setApplication] = useState(searchParams.get("application") ?? "all");
+  const [model, setModel] = useState(searchParams.get("model") ?? "all");
   const [rows, setRows] = useState<TraceInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  useSyncedSearchParams({ q: query, status, application, model });
 
   async function load() {
     if (!ctx) return;
@@ -55,18 +59,40 @@ function TracesInner() {
     void load();
   }, [ctx]);
 
+  const applications = useMemo(() => {
+    const values = new Set<string>();
+    for (const row of rows) {
+      const value = row.trace_metadata?.["mlflow.source.name"] || tagMap(row.tags).application;
+      if (value) values.add(value);
+    }
+    return [...values].sort();
+  }, [rows]);
+
+  const models = useMemo(() => {
+    const values = new Set<string>();
+    for (const row of rows) {
+      const value = row.trace_metadata?.["mlflow.trace.model"] || tagMap(row.tags).model;
+      if (value) values.add(value);
+    }
+    return [...values].sort();
+  }, [rows]);
+
   const filtered = useMemo(() => {
     return rows.filter((row) => {
       const state = traceStatus(row).toUpperCase();
       if (status === "ok" && state !== "OK" && state !== "SUCCESS") return false;
       if (status === "error" && state !== "ERROR" && state !== "FAILED") return false;
+      const tags = tagMap(row.tags);
+      const app = row.trace_metadata?.["mlflow.source.name"] || tags.application || "";
+      const modelName = row.trace_metadata?.["mlflow.trace.model"] || tags.model || "";
+      if (application !== "all" && app !== application) return false;
+      if (model !== "all" && modelName !== model) return false;
       const needle = query.trim().toLowerCase();
       if (!needle) return true;
-      const tags = tagMap(row.tags);
       const hay = `${row.trace_id ?? ""} ${row.request_id ?? ""} ${row.name ?? ""} ${JSON.stringify(tags)} ${JSON.stringify(row.trace_metadata ?? {})}`;
       return hay.toLowerCase().includes(needle);
     });
-  }, [query, rows, status]);
+  }, [application, model, query, rows, status]);
 
   return (
     <div className="page">
@@ -140,11 +166,34 @@ function TracesInner() {
               onSearch={setQuery}
               searchPlaceholder="Search name or trace id"
               filters={
-                <select className="quiet" value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Status">
-                  <option value="all">All statuses</option>
-                  <option value="ok">OK</option>
-                  <option value="error">Error</option>
-                </select>
+                <>
+                  <select className="quiet" value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Status">
+                    <option value="all">All statuses</option>
+                    <option value="ok">OK</option>
+                    <option value="error">Error</option>
+                  </select>
+                  <select
+                    className="quiet"
+                    value={application}
+                    onChange={(event) => setApplication(event.target.value)}
+                    aria-label="Application"
+                  >
+                    <option value="all">All applications</option>
+                    {applications.map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                  <select className="quiet" value={model} onChange={(event) => setModel(event.target.value)} aria-label="Model">
+                    <option value="all">All models</option>
+                    {models.map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                </>
               }
               emptyTitle="No traces yet"
               emptyBody="Instrument with mlflow.trace or an OpenTelemetry exporter pointed at this host."
@@ -157,10 +206,12 @@ function TracesInner() {
         </div>
         <SavedViews
           surface="traces"
-          query={{ q: query, status }}
+          query={{ q: query, status, application, model }}
           onApply={(next) => {
             setQuery(String(next.q ?? ""));
             setStatus(String(next.status ?? "all"));
+            setApplication(String(next.application ?? "all"));
+            setModel(String(next.model ?? "all"));
           }}
         />
       </div>

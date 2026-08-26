@@ -100,7 +100,7 @@ function TraceDetailsInner() {
   if (error) {
     return (
       <div className="page">
-        <ErrorState title="Unable to load traces." body={error} />
+        <ErrorState title="Unable to load this trace." body={error} />
       </div>
     );
   }
@@ -204,6 +204,26 @@ function TraceDetailsInner() {
             <dd>{typeof selected.status === "string" ? selected.status : selected.status?.code ?? "—"}</dd>
             <dt>Span ID</dt>
             <dd className="mono">{selected.span_id}</dd>
+            <dt>Model</dt>
+            <dd>
+              {String(
+                selected.attributes?.["mlflow.chat.model"] ??
+                  selected.attributes?.model ??
+                  selected.attributes?.["llm.model"] ??
+                  "—",
+              )}
+            </dd>
+            <dt>Tokens</dt>
+            <dd>
+              {String(
+                selected.attributes?.["mlflow.trace.tokenUsage"] ??
+                  selected.attributes?.["llm.token_count"] ??
+                  selected.attributes?.tokens ??
+                  "—",
+              )}
+            </dd>
+            <dt>Cost</dt>
+            <dd>{String(selected.attributes?.cost ?? selected.attributes?.["mlflow.span.cost"] ?? "—")}</dd>
           </dl>
           <h3 style={{ marginTop: 16 }}>Input</h3>
           <pre className="secret">{stringify(spanIO(selected).input)}</pre>

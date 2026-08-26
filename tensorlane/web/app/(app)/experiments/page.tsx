@@ -15,14 +15,17 @@ import { useShell } from "@/lib/shell";
 import { useTrackingContext } from "@/lib/useTrackingContext";
 import {
   searchExperiments,
+  searchLoggedModels,
   searchRuns,
   tagMap,
   type Experiment,
   type Run,
 } from "@/lib/tracking";
+import { useSyncedSearchParams } from "@/lib/useSyncedSearchParams";
 
 type ExperimentRow = Experiment & {
   runCount: number;
+  modelCount: number;
   lastRun: number;
   owner: string;
   tagsLabel: string;
@@ -34,10 +37,12 @@ function ExperimentsInner() {
   const ctx = useTrackingContext();
   const { role } = useShell();
   const [query, setQuery] = useState(searchParams.get("q") ?? "");
+  const [stage, setStage] = useState(searchParams.get("stage") ?? "all");
   const [rows, setRows] = useState<ExperimentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(searchParams.get("new") === "1");
+  useSyncedSearchParams({ q: query, stage, new: creating ? "1" : "" });
 
   async function load() {
     if (!ctx) return;
@@ -51,8 +56,16 @@ function ExperimentsInner() {
     }
     const experiments = experimentsResult.data.experiments ?? [];
     const ids = experiments.map((row) => row.experiment_id).filter((id): id is string => Boolean(id));
-    const runsResult = await searchRuns(ctx, ids, { maxResults: 200 });
+    const [runsResult, modelResult] = await Promise.all([
+      searchRuns(ctx, ids, { maxResults: 200 }),
+      searchLoggedModels(ctx, ids),
+    ]);
     const runs = runsResult.ok ? (runsResult.data.runs ?? []) : [];
+    const modelsByExperiment = new Map<string, number>();
+    for (const model of modelResult.ok ? (modelResult.data.models ?? []) : []) {
+      const experimentId = model.info?.experiment_id ?? "";
+      modelsByExperiment.set(experimentId, (modelsByExperiment.get(experimentId) ?? 0) + 1);
+    }
     const byExperiment = new Map<string, Run[]>();
     for (const run of runs) {
       const experimentId = run.info?.experiment_id ?? "";
@@ -72,6 +85,9 @@ function ExperimentsInner() {
         return {
           ...experiment,
           runCount: related.length,
+          modelCount:
+            modelsByExperiment.get(experiment.experiment_id ?? "") ??
+            related.filter((run) => Boolean(tagMap(run.data?.tags)["mlflow.log-model.history"])).length,
           lastRun: last,
           owner,
           tagsLabel: Object.entries(tagMap(experiment.tags))
@@ -88,21 +104,14 @@ function ExperimentsInner() {
     void load();
   }, [ctx]);
 
-  useEffect(() => {
-    const current = searchParams.get("q") ?? "";
-    if (current === query) return;
-    const params = new URLSearchParams(searchParams.toString());
-    if (query) params.set("q", query);
-    else params.delete("q");
-    const qs = params.toString();
-    router.replace(qs ? `/experiments?${qs}` : "/experiments", { scroll: false });
-  }, [query, router, searchParams]);
-
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return rows;
-    return rows.filter((row) => `${row.name ?? ""} ${row.owner} ${row.tagsLabel}`.toLowerCase().includes(needle));
-  }, [query, rows]);
+    return rows.filter((row) => {
+      if (stage !== "all" && (row.lifecycle_stage ?? "active") !== stage) return false;
+      if (!needle) return true;
+      return `${row.name ?? ""} ${row.owner} ${row.tagsLabel}`.toLowerCase().includes(needle);
+    });
+  }, [query, rows, stage]);
 
   return (
     <div className="page">
@@ -144,6 +153,12 @@ function ExperimentsInner() {
                   cell: (row) => formatEpoch(row.lastRun || undefined),
                 },
                 { id: "runs", header: "Runs", sortValue: (row) => row.runCount, cell: (row) => row.runCount },
+                {
+                  id: "models",
+                  header: "Models",
+                  sortValue: (row) => row.modelCount,
+                  cell: (row) => row.modelCount,
+                },
                 { id: "owner", header: "Owner", sortValue: (row) => row.owner, cell: (row) => row.owner },
                 {
                   id: "stage",
@@ -166,6 +181,13 @@ function ExperimentsInner() {
               search={query}
               onSearch={setQuery}
               searchPlaceholder="Search experiments"
+              filters={
+                <select className="quiet" value={stage} onChange={(event) => setStage(event.target.value)} aria-label="Stage">
+                  <option value="all">All stages</option>
+                  <option value="active">Active</option>
+                  <option value="deleted">Deleted</option>
+                </select>
+              }
               emptyTitle="No experiments yet"
               emptyBody="Experiments help you organize and compare your ML runs."
               emptyAction={
@@ -179,7 +201,14 @@ function ExperimentsInner() {
             />
           </div>
         </div>
-        <SavedViews surface="experiments" query={{ q: query }} onApply={(next) => setQuery(String(next.q ?? ""))} />
+        <SavedViews
+          surface="experiments"
+          query={{ q: query, stage }}
+          onApply={(next) => {
+            setQuery(String(next.q ?? ""));
+            setStage(String(next.stage ?? "all"));
+          }}
+        />
       </div>
       {creating && ctx ? (
         <CreateExperimentModal

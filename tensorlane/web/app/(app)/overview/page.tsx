@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ActivityFeed } from "@/components/ui/ActivityFeed";
 import { BarChart, ChartCard, LineChart } from "@/components/ui/Charts";
 import { CreateExperimentModal } from "@/components/tracking/CreateExperimentModal";
+import { QuickStart } from "@/components/QuickStart";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { CardSkeleton, ChartSkeleton, TableSkeleton } from "@/components/ui/Skeleton";
@@ -14,7 +15,7 @@ import { ErrorState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { CopyButton } from "@/components/CopyButton";
 import { api, type Approval, type Usage } from "@/lib/api";
-import { formatCount } from "@/lib/format";
+import { formatCount, periodDelta } from "@/lib/format";
 import { canWrite } from "@/lib/permissions";
 import { useShell } from "@/lib/shell";
 import { useTrackingContext } from "@/lib/useTrackingContext";
@@ -46,6 +47,7 @@ export default function OverviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [reload, setReload] = useState(0);
   const tracking = process.env.NEXT_PUBLIC_TRACKING_URI || "https://api.tensorlane.ai";
 
   useEffect(() => {
@@ -98,7 +100,7 @@ export default function OverviewPage() {
     return () => {
       cancelled = true;
     };
-  }, [ctx]);
+  }, [ctx, reload]);
 
   const statusCounts = useMemo(() => {
     const counts = { Completed: 0, Failed: 0, Running: 0, Killed: 0 };
@@ -143,9 +145,12 @@ export default function OverviewPage() {
         </Link>
       </PageHeader>
 
-      {error ? <ErrorState title="Unable to load workspace telemetry" body={error} /> : null}
+      {error ? (
+        <ErrorState title="Unable to load workspace telemetry" body={error} onRetry={() => setReload((value) => value + 1)} />
+      ) : null}
 
       <div className="grid">
+        <QuickStart hasRun={runs.length > 0} />
         {loading ? (
           <>
             <div className="span-3">
@@ -168,6 +173,7 @@ export default function OverviewPage() {
                 label="Total Runs"
                 icon="runs"
                 value={formatCount(runs.length)}
+                delta={periodDelta(runSeries)}
                 hint="Last 200 in this workspace"
                 series={runSeries.map((row) => row.value)}
               />
@@ -188,6 +194,14 @@ export default function OverviewPage() {
                 label="Traces Ingested"
                 icon="traces"
                 value={formatCount(tracesMetric?.current ?? traces.length)}
+                delta={periodDelta(
+                  bucketByDay(
+                    traces.map((trace) => {
+                      if (trace.timestamp_ms) return Number(trace.timestamp_ms);
+                      return trace.request_time ? Date.parse(trace.request_time) : 0;
+                    }),
+                  ),
+                )}
                 hint={tracesMetric ? `Plan ${formatCount(tracesMetric.limit)}` : "This workspace"}
                 series={bucketByDay(
                   traces.map((trace) => {

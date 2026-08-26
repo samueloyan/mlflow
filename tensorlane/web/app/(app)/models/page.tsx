@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable } from "@/components/ui/DataTable";
@@ -9,14 +9,17 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { formatEpoch } from "@/lib/format";
 import { useTrackingContext } from "@/lib/useTrackingContext";
 import { searchRegisteredModels, type RegisteredModel } from "@/lib/tracking";
+import { useSyncedSearchParams } from "@/lib/useSyncedSearchParams";
 
-export default function ModelsPage() {
+function ModelsInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const ctx = useTrackingContext();
   const [rows, setRows] = useState<RegisteredModel[]>([]);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(searchParams.get("q") ?? "");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  useSyncedSearchParams({ q: query });
 
   async function load() {
     if (!ctx) return;
@@ -95,5 +98,13 @@ export default function ModelsPage() {
         />
       </div>
     </div>
+  );
+}
+
+export default function ModelsPage() {
+  return (
+    <Suspense fallback={<div className="page">Loading models…</div>}>
+      <ModelsInner />
+    </Suspense>
   );
 }
