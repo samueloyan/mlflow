@@ -16,6 +16,7 @@ def settings(tmp_path: Path) -> Settings:
     return Settings(
         database_url=f"sqlite:///{tmp_path}/tensorlane.db",
         mlflow_internal_uri="null://",
+        mlflow_static_prefix="",
         tensorlane_pepper="test-pepper",
         artifact_root="file:///tmp/tensorlane-artifacts",
         web_origin="http://testserver",

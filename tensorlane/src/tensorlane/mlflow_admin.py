@@ -4,6 +4,8 @@ from typing import Protocol
 
 import httpx
 
+from tensorlane.mlflow_paths import mlflow_internal_url
+
 
 class MlflowAdmin(Protocol):
     def create_workspace(self, name: str, default_artifact_root: str, description: str) -> None: ...
@@ -12,13 +14,16 @@ class MlflowAdmin(Protocol):
 
 
 class HttpMlflowAdmin:
-    def __init__(self, base_url: str, timeout: float = 15.0) -> None:
+    def __init__(
+        self, base_url: str, timeout: float = 15.0, static_prefix: str = "/mlflow"
+    ) -> None:
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
+        self._static_prefix = static_prefix
 
     def create_workspace(self, name: str, default_artifact_root: str, description: str) -> None:
         response = httpx.post(
-            f"{self._base_url}/api/3.0/mlflow/workspaces",
+            mlflow_internal_url(self._base_url, self._static_prefix, "/api/3.0/mlflow/workspaces"),
             json={
                 "name": name,
                 "description": description,
@@ -36,7 +41,9 @@ class HttpMlflowAdmin:
 
     def delete_workspace(self, name: str) -> None:
         response = httpx.delete(
-            f"{self._base_url}/api/3.0/mlflow/workspaces/{name}",
+            mlflow_internal_url(
+                self._base_url, self._static_prefix, f"/api/3.0/mlflow/workspaces/{name}"
+            ),
             timeout=self._timeout,
         )
         if response.status_code >= 400 and response.status_code != 404:

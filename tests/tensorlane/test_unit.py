@@ -136,3 +136,34 @@ def test_artifact_prefix_rejects_cross_workspace():
     assert_artifact_prefix("org_a", "ws_a", "org/org_a/workspace/ws_a/run/1")
     with pytest.raises(AuthorizationError, match="outside the workspace prefix"):
         assert_artifact_prefix("org_a", "ws_a", "org/org_b/workspace/ws_b/run/1")
+
+
+def test_mlflow_upstream_path_prefixes_protocol_not_artifacts():
+    from tensorlane.mlflow_paths import mlflow_internal_url, mlflow_upstream_path
+
+    assert mlflow_upstream_path("/api/2.0/mlflow/experiments/search", "/mlflow") == (
+        "/mlflow/api/2.0/mlflow/experiments/search"
+    )
+    assert mlflow_upstream_path("/ajax-api/2.0/mlflow/runs/search", "mlflow") == (
+        "/mlflow/ajax-api/2.0/mlflow/runs/search"
+    )
+    assert mlflow_upstream_path("/mlflow/health", "/mlflow") == "/mlflow/health"
+    assert mlflow_upstream_path("/mlflow-artifacts/artifacts/foo", "/mlflow") == (
+        "/mlflow-artifacts/artifacts/foo"
+    )
+    assert mlflow_upstream_path("/api/2.0/mlflow/runs/create", "") == "/api/2.0/mlflow/runs/create"
+    assert (
+        mlflow_internal_url("http://127.0.0.1:5000", "/mlflow", "/api/3.0/mlflow/workspaces")
+        == "http://127.0.0.1:5000/mlflow/api/3.0/mlflow/workspaces"
+    )
+
+
+def test_sync_workspaces_creates_every_live_workspace(db, two_tenants):
+    from tensorlane.mlflow_admin import NullMlflowAdmin
+    from tensorlane.seed import sync_workspaces
+
+    admin = NullMlflowAdmin()
+    names = sync_workspaces(db, admin)
+    assert two_tenants["acme_ws"].mlflow_workspace_name in names
+    assert two_tenants["other_ws"].mlflow_workspace_name in names
+    assert admin.created[0][0] == names[0]

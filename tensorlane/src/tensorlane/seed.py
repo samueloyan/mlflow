@@ -87,6 +87,24 @@ def create_org_with_owner(
     return org, workspace
 
 
+def sync_workspaces(session: Session, admin: MlflowAdmin) -> list[str]:
+    """Create MLflow workspaces for every live Tensorlane workspace.
+
+    Safe to run after switching ``MLFLOW_INTERNAL_URI`` from ``null://`` to a
+    real tracking server. HttpMlflowAdmin treats 409 as already-created.
+    """
+    names: list[str] = []
+    rows = session.scalars(select(Workspace).where(Workspace.deleted_at.is_(None))).all()
+    for workspace in rows:
+        admin.create_workspace(
+            workspace.mlflow_workspace_name,
+            workspace.artifact_root,
+            workspace.name,
+        )
+        names.append(workspace.mlflow_workspace_name)
+    return names
+
+
 def seed_demo(
     session: Session, *, artifact_root: str, mlflow: MlflowAdmin | None = None
 ) -> dict[str, str]:
@@ -106,6 +124,8 @@ def seed_demo(
             if other
             else None
         )
+        if mlflow is not None:
+            sync_workspaces(session, mlflow)
         return {
             "alice_user_id": existing.id,
             "bob_user_id": bob.id if bob else "",

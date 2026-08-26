@@ -35,6 +35,7 @@ from tensorlane.errors import (
     error_body,
 )
 from tensorlane.ids import new_request_id
+from tensorlane.mlflow_paths import mlflow_upstream_path
 from tensorlane.ratelimit import allow
 from tensorlane.services import api_key_role, get_membership, usage_sum, workspace_by_mlflow_name
 
@@ -403,7 +404,8 @@ async def _proxy_mlflow(app: FastAPI, request: Request, path: str) -> Response:
     if settings.mlflow_internal_uri.startswith("null://"):
         return _mlflow_unavailable()
 
-    target = httpx.URL(settings.mlflow_internal_uri.rstrip("/") + path)
+    upstream_path = mlflow_upstream_path(path, settings.mlflow_static_prefix)
+    target = httpx.URL(settings.mlflow_internal_uri.rstrip("/") + upstream_path)
     headers = _filter_request_headers(request, strip_credentials=True)
     headers["x-mlflow-workspace"] = mlflow_workspace_name
     headers["x-request-id"] = request_id

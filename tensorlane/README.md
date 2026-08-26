@@ -31,6 +31,10 @@ mlflow.set_experiment("fraud-detection")
 
 ## Local development (no Docker)
 
+`scripts/dev.sh` starts the gateway and Next.js with the data plane stubbed (`MLFLOW_INTERNAL_URI=null://`). Use that for control-plane and chrome work. Tracking pages fail closed until a real MLflow server is running.
+
+### UI-only (stubbed tracking)
+
 ```bash
 uv venv .venv-tensorlane
 source .venv-tensorlane/bin/activate
@@ -38,12 +42,47 @@ uv pip install -e "./tensorlane[dev]"
 export DATABASE_URL=sqlite:////$PWD/tensorlane-dev.db
 export TENSORLANE_PEPPER=dev-pepper-change-me
 export TENSORLANE_SECRET_KEY=dev-secret-change-me
-chmod +x tensorlane/scripts/dev.sh
+chmod +x tensorlane/scripts/dev.sh tensorlane/scripts/dev-full.sh
 ./tensorlane/scripts/dev.sh
 ```
 
 - Gateway: `http://localhost:8080`
 - Dashboard (hot reload): `http://localhost:3000`
+
+### Full local path (real tracking, still not production)
+
+Needs this checkout's MLflow CLI (repo `.venv` after `uv sync`) plus `.venv-tensorlane`. Starts MLflow with `--enable-workspaces --static-prefix /mlflow`, points the gateway at it, and syncs Tensorlane workspaces into the data plane.
+
+```bash
+./tensorlane/scripts/dev-full.sh
+```
+
+In another terminal, log a run (creates a workspace-scoped `tl_live_` key if you pass dashboard credentials):
+
+```bash
+.venv-tensorlane/bin/python tensorlane/scripts/smoke_tracking.py \
+  --gateway http://127.0.0.1:8080 \
+  --web http://127.0.0.1:3000 \
+  --email you@example.com --password 'your-password'
+```
+
+Or the SDK contract against the same gateway:
+
+```python
+import os
+import mlflow
+
+os.environ["MLFLOW_TRACKING_TOKEN"] = "tl_live_..."
+mlflow.set_tracking_uri("http://localhost:8080")
+mlflow.set_experiment("fraud-detection")
+```
+
+If workspaces were created while MLflow was stubbed, provision them on the live server:
+
+```bash
+export MLFLOW_INTERNAL_URI=http://127.0.0.1:5000
+tensorlane sync-workspaces
+```
 
 ```bash
 ./tensorlane/scripts/test.sh

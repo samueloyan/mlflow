@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     tensorlane_secret_key: str = "dev-only-secret"
     public_url: str = "http://localhost:8080"
     mlflow_internal_uri: str = "http://127.0.0.1:5000"
+    mlflow_static_prefix: str = "/mlflow"
     web_internal_uri: str = ""
     artifact_root: str = "file:///tmp/tensorlane-artifacts"
     redis_url: str | None = None

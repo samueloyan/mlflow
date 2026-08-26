@@ -68,6 +68,7 @@ def test_gateway_overwrites_workspace_header_and_strips_key(fake_mlflow, tmp_pat
     settings = Settings(
         database_url=f"sqlite:///{tmp_path}/tensorlane.db",
         mlflow_internal_uri=fake_mlflow,
+        mlflow_static_prefix="",
         tensorlane_pepper="test-pepper",
         artifact_root="file:///tmp/tensorlane-artifacts",
     )
@@ -117,6 +118,71 @@ def test_gateway_overwrites_workspace_header_and_strips_key(fake_mlflow, tmp_pat
     assert captured["workspace"] == workspace.mlflow_workspace_name
     assert captured["authorization"] is None
     assert captured["cookie"] is None
+
+
+def test_gateway_prefixes_mlflow_routes_for_static_prefix(tmp_path):
+    captured.clear()
+    port = _free_port()
+
+    async def experiments_create_prefixed(request: Request) -> JSONResponse:
+        captured["path"] = request.url.path
+        captured["workspace"] = request.headers.get("x-mlflow-workspace")
+        return JSONResponse({"experiment_id": "7"})
+
+    starlette_app = Starlette(
+        routes=[
+            Route(
+                "/mlflow/api/2.0/mlflow/experiments/create",
+                experiments_create_prefixed,
+                methods=["POST"],
+            )
+        ]
+    )
+    config = uvicorn.Config(starlette_app, host="127.0.0.1", port=port, log_level="error")
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    _wait_for_port(port)
+    try:
+        settings = Settings(
+            database_url=f"sqlite:///{tmp_path}/tensorlane.db",
+            mlflow_internal_uri=f"http://127.0.0.1:{port}",
+            mlflow_static_prefix="/mlflow",
+            tensorlane_pepper="test-pepper",
+            artifact_root="file:///tmp/tensorlane-artifacts",
+            control_plane_rpm=0,
+            mlflow_write_rpm=0,
+        )
+        app = create_app(settings)
+        with TestClient(app) as client:
+            db = session_factory()()
+            alice = create_user(db, "alice@acme.test", "Alice")
+            create_session_token(db, alice, "alice-session")
+            acme, workspace = create_org_with_owner(db, alice, "Acme")
+            db.commit()
+            created = client.post(
+                "/api/v1/api-keys",
+                json={
+                    "name": "ci",
+                    "organization_id": acme.id,
+                    "workspace_id": workspace.id,
+                    "live": True,
+                },
+                headers={"Authorization": "Bearer alice-session"},
+            )
+            assert created.status_code == 201, created.text
+            allowed = client.post(
+                "/api/2.0/mlflow/experiments/create",
+                json={"name": "fraud-detection"},
+                headers={"Authorization": f"Bearer {created.json()['secret']}"},
+            )
+            db.close()
+        assert allowed.status_code == 200, allowed.text
+        assert allowed.json()["experiment_id"] == "7"
+        assert captured["path"] == "/mlflow/api/2.0/mlflow/experiments/create"
+        assert captured["workspace"] == workspace.mlflow_workspace_name
+    finally:
+        server.should_exit = True
 
 
 def test_health_and_ready(client):

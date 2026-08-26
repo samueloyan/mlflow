@@ -13,7 +13,7 @@ from tensorlane.config import Settings
 from tensorlane.db.session import configure_session, create_schema, session_factory
 from tensorlane.jobs import run_once
 from tensorlane.mlflow_admin import HttpMlflowAdmin, NullMlflowAdmin
-from tensorlane.seed import seed_demo
+from tensorlane.seed import seed_demo, sync_workspaces
 
 log = logging.getLogger("tensorlane.cli")
 
@@ -23,17 +23,21 @@ def _serve(args: argparse.Namespace) -> None:
     uvicorn.run(create_app(settings), host=args.host, port=args.port, factory=False)
 
 
+def _mlflow_admin(settings: Settings) -> HttpMlflowAdmin | NullMlflowAdmin:
+    if settings.mlflow_internal_uri.startswith("null://"):
+        return NullMlflowAdmin()
+    return HttpMlflowAdmin(
+        settings.mlflow_internal_uri, static_prefix=settings.mlflow_static_prefix
+    )
+
+
 def _seed(_: argparse.Namespace) -> None:
     settings = Settings()
     configure_session(settings)
     create_schema()
     session = session_factory()()
     try:
-        mlflow: HttpMlflowAdmin | NullMlflowAdmin
-        if settings.mlflow_internal_uri.startswith("null://"):
-            mlflow = NullMlflowAdmin()
-        else:
-            mlflow = HttpMlflowAdmin(settings.mlflow_internal_uri)
+        mlflow = _mlflow_admin(settings)
         result = seed_demo(session, artifact_root=settings.artifact_root, mlflow=mlflow)
         session.commit()
         print(json.dumps(result, indent=2))
@@ -42,6 +46,19 @@ def _seed(_: argparse.Namespace) -> None:
             "Sign up with those emails in the web app to attach a password, "
             "or call the API with Bearer alice-session / bob-session in development."
         )
+    finally:
+        session.close()
+
+
+def _sync_workspaces(_: argparse.Namespace) -> None:
+    settings = Settings()
+    configure_session(settings)
+    create_schema()
+    session = session_factory()()
+    try:
+        names = sync_workspaces(session, _mlflow_admin(settings))
+        session.commit()
+        print(json.dumps({"workspaces": names}, indent=2))
     finally:
         session.close()
 
@@ -98,6 +115,11 @@ def main() -> None:
     serve.set_defaults(func=_serve)
     seed = sub.add_parser("seed", help="Create Acme and Othercorp demo tenants")
     seed.set_defaults(func=_seed)
+    sync_ws = sub.add_parser(
+        "sync-workspaces",
+        help="Create MLflow workspaces for existing Tensorlane workspaces",
+    )
+    sync_ws.set_defaults(func=_sync_workspaces)
     worker = sub.add_parser("worker", help="Run control-plane jobs (alerts, retention, inventory)")
     worker.add_argument("--interval", type=float, default=2.0)
     worker.set_defaults(func=_worker)
