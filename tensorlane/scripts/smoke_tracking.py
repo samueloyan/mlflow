@@ -86,7 +86,8 @@ def resolve_token(args: argparse.Namespace) -> str:
         return env_token
     if not args.email or not args.password:
         raise SystemExit("Pass --token / MLFLOW_TRACKING_TOKEN, or --email and --password")
-    with sign_in(args.web, args.email, args.password) as web:
+    web = sign_in(args.web, args.email, args.password)
+    try:
         session_cookie = web.cookies.get("better-auth.session_token")
         if not session_cookie:
             _fail("Sign-in did not set better-auth.session_token")
@@ -110,6 +111,8 @@ def resolve_token(args: argparse.Namespace) -> str:
                 _fail("Organization has no workspace")
             workspace_id = str(workspaces[0]["id"])
             return create_key(gateway, organization_id, workspace_id)
+    finally:
+        web.close()
 
 
 def ensure_experiment(gateway: httpx.Client) -> str:
