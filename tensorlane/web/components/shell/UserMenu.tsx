@@ -18,11 +18,17 @@ export function UserMenu({ onClose }: { onClose: () => void }) {
           {organization ? ` · ${organization.plan}` : ""}
         </span>
       </div>
+      <Link className="dropdown-item" href="/tracking" onClick={onClose}>
+        Workbench
+      </Link>
       <Link className="dropdown-item" href="/settings" onClick={onClose}>
         Settings
       </Link>
       <Link className="dropdown-item" href="/security" onClick={onClose}>
         Security
+      </Link>
+      <Link className="dropdown-item" href="/billing" onClick={onClose}>
+        Billing
       </Link>
       <form action="/api/logout" method="post">
         <button type="submit" className="dropdown-item" style={{ width: "100%", border: 0, background: "transparent", textAlign: "left" }}>

@@ -126,7 +126,8 @@ export function runStatusTone(status: string | undefined): "success" | "danger" 
   const value = (status ?? "").toUpperCase();
   if (value === "FINISHED" || value === "OK" || value === "COMPLETED") return "success";
   if (value === "FAILED" || value === "ERROR" || value === "KILLED") return "danger";
-  if (value === "RUNNING" || value === "SCHEDULED" || value === "IN_PROGRESS") return "warning";
+  if (value === "RUNNING") return "info";
+  if (value === "SCHEDULED" || value === "IN_PROGRESS") return "warning";
   return "neutral";
 }
 

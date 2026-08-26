@@ -2,7 +2,17 @@ import type { ReactNode } from "react";
 
 const SERIES = ["var(--color-primary)", "var(--color-secondary)", "var(--color-success)", "var(--color-warning)"];
 
-export function Sparkline({ values, width = 88, height = 28 }: { values: number[]; width?: number; height?: number }) {
+export function Sparkline({
+  values,
+  width = 88,
+  height = 28,
+  color = "var(--color-primary)",
+}: {
+  values: number[];
+  width?: number;
+  height?: number;
+  color?: string;
+}) {
   if (values.length < 2) return null;
   const max = Math.max(...values, 1);
   const min = Math.min(...values, 0);
@@ -16,7 +26,7 @@ export function Sparkline({ values, width = 88, height = 28 }: { values: number[
     .join(" ");
   return (
     <svg className="sparkline" width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
-      <path d={d} />
+      <path d={d} stroke={color} />
     </svg>
   );
 }
@@ -49,14 +59,20 @@ export function LineChart({
         ))}
         {series.map((row, seriesIndex) => {
           const color = row.color ?? SERIES[seriesIndex % SERIES.length];
-          const d = row.values
-            .map((item, index) => {
-              const x = pad + (index / Math.max(row.values.length - 1, 1)) * (width - pad - 8);
-              const y = 8 + (1 - item.value / max) * (height - 32);
-              return `${index === 0 ? "M" : "L"}${x} ${y}`;
-            })
-            .join(" ");
-          return <path key={row.label} d={d} fill="none" stroke={color} strokeWidth="2" />;
+          const points = row.values.map((item, index) => {
+            const x = pad + (index / Math.max(row.values.length - 1, 1)) * (width - pad - 8);
+            const y = 8 + (1 - item.value / max) * (height - 32);
+            return { x, y, ...item };
+          });
+          const d = points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`).join(" ");
+          return (
+            <g key={row.label}>
+              <path d={d} fill="none" stroke={color} strokeWidth="2.25" />
+              {points.map((point) => (
+                <circle key={`${row.label}-${point.x}`} cx={point.x} cy={point.y} r="3" fill={color} />
+              ))}
+            </g>
+          );
         })}
         {labels.map((label, index) => {
           if (index % Math.ceil(labels.length / 7) !== 0) return null;
@@ -113,6 +129,66 @@ export function BarChart({
           );
         })}
       </svg>
+    </div>
+  );
+}
+
+export function DonutChart({
+  items,
+  totalLabel = "Total",
+}: {
+  items: { label: string; value: number; color?: string }[];
+  totalLabel?: string;
+}) {
+  const total = items.reduce((sum, item) => sum + item.value, 0);
+  const radius = 54;
+  const circumference = 2 * Math.PI * radius;
+  let offset = 0;
+  return (
+    <div className="donut-wrap">
+      <svg viewBox="0 0 160 160" width="160" height="160" role="img" aria-label="Donut chart">
+        <circle cx="80" cy="80" r={radius} fill="none" stroke="var(--color-border)" strokeWidth="16" />
+        {total > 0
+          ? items.map((item, index) => {
+              const color = item.color ?? SERIES[index % SERIES.length];
+              const length = (item.value / total) * circumference;
+              const circle = (
+                <circle
+                  key={item.label}
+                  cx="80"
+                  cy="80"
+                  r={radius}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth="16"
+                  strokeDasharray={`${length} ${circumference - length}`}
+                  strokeDashoffset={-offset}
+                  strokeLinecap="butt"
+                  transform="rotate(-90 80 80)"
+                />
+              );
+              offset += length;
+              return circle;
+            })
+          : null}
+        <text x="80" y="76" textAnchor="middle" fontSize="18" fontWeight="600" fill="var(--color-text-primary)">
+          {total.toLocaleString()}
+        </text>
+        <text x="80" y="94" textAnchor="middle" fontSize="10" fill="var(--color-text-secondary)">
+          {totalLabel}
+        </text>
+      </svg>
+      <div className="chart-legend donut-legend">
+        {items.map((item, index) => {
+          const pct = total ? ((item.value / total) * 100).toFixed(1) : "0.0";
+          return (
+            <span key={item.label}>
+              <i style={{ background: item.color ?? SERIES[index % SERIES.length] }} />
+              {item.label} {item.value.toLocaleString()} ({pct}%)
+            </span>
+          );
+        })}
+      </div>
     </div>
   );
 }

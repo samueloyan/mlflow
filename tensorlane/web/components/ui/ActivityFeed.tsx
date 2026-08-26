@@ -1,10 +1,10 @@
-import { formatDate } from "@/lib/format";
+import { formatRelative } from "@/lib/format";
 
 export type ActivityItem = {
   id: string;
   title: string;
   detail?: string;
-  at?: string | null;
+  at?: string | number | null;
 };
 
 export function ActivityFeed({ items }: { items: ActivityItem[] }) {
@@ -12,16 +12,15 @@ export function ActivityFeed({ items }: { items: ActivityItem[] }) {
     return <p className="lede">No recent activity.</p>;
   }
   return (
-    <ul className="plain-list" style={{ paddingLeft: 0, listStyle: "none" }}>
+    <ul className="activity-feed">
       {items.map((item) => (
-        <li key={item.id} style={{ padding: "10px 0", borderBottom: "1px solid var(--color-border)" }}>
-          <strong>{item.title}</strong>
-          {item.detail ? <div className="lede" style={{ margin: "4px 0 0" }}>{item.detail}</div> : null}
-          {item.at ? (
-            <div className="lede" style={{ margin: "4px 0 0", fontSize: 12 }}>
-              {formatDate(item.at)}
-            </div>
-          ) : null}
+        <li key={item.id}>
+          <span className="activity-dot" aria-hidden="true" />
+          <div>
+            <strong>{item.title}</strong>
+            {item.detail ? <div className="lede">{item.detail}</div> : null}
+            {item.at ? <div className="activity-time">{formatRelative(item.at)}</div> : null}
+          </div>
         </li>
       ))}
     </ul>

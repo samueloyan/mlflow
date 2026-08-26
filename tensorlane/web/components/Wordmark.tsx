@@ -6,7 +6,7 @@ export function Wordmark({ tone = "dark" }: { tone?: "dark" | "light" }) {
         <i />
         <i />
       </span>
-      <span className="wordmark-text">Tensorlane</span>
+      <span className="wordmark-text">tensorlane</span>
     </a>
   );
 }

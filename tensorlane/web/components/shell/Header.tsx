@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 
+import { Avatar } from "@/components/ui/Avatar";
 import { Icon } from "@/components/ui/Icons";
 import { pageTitle } from "@/lib/nav";
 import { useShell } from "@/lib/shell";
@@ -13,10 +13,11 @@ import { UserMenu } from "./UserMenu";
 
 export function Header({ onSearch }: { onSearch: () => void }) {
   const pathname = usePathname();
-  const { organization, workspace } = useShell();
+  const { me, organization, workspace } = useShell();
   const title = useMemo(() => pageTitle(pathname), [pathname]);
   const [notesOpen, setNotesOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
+  const displayName = me?.name || me?.email || "User";
 
   return (
     <header className="app-header">
@@ -29,12 +30,12 @@ export function Header({ onSearch }: { onSearch: () => void }) {
           <strong>{title}</strong>
         </nav>
       </div>
+      <button type="button" className="search-trigger" onClick={onSearch}>
+        <Icon name="search" />
+        <span>Search runs, experiments, models, datasets, traces...</span>
+        <kbd>⌘K</kbd>
+      </button>
       <div className="app-header-right">
-        <button type="button" className="search-trigger" onClick={onSearch}>
-          <Icon name="search" />
-          Search Tensorlane
-          <kbd>⌘K</kbd>
-        </button>
         <a
           className="icon-btn"
           href="https://mlflow.org/docs/latest/"
@@ -64,7 +65,7 @@ export function Header({ onSearch }: { onSearch: () => void }) {
         <div style={{ position: "relative" }}>
           <button
             type="button"
-            className="icon-btn"
+            className="avatar-btn"
             aria-label="User menu"
             data-open={userOpen}
             onClick={() => {
@@ -72,13 +73,10 @@ export function Header({ onSearch }: { onSearch: () => void }) {
               setNotesOpen(false);
             }}
           >
-            <Icon name="user" />
+            <Avatar name={displayName} size={32} />
           </button>
           {userOpen ? <UserMenu onClose={() => setUserOpen(false)} /> : null}
         </div>
-        <Link className="btn secondary" href="/tracking">
-          Workbench
-        </Link>
       </div>
     </header>
   );

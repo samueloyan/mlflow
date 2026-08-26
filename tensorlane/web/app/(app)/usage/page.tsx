@@ -21,7 +21,11 @@ export default function UsagePage() {
         kicker="Capacity"
         title="Usage"
         lede="Warnings fire at 80%. Traces and runs may exceed plan limits. Storage and seats stop. API volume is throttled."
-      />
+      >
+        <a className="btn secondary" href="/billing">
+          Manage billing
+        </a>
+      </PageHeader>
       <div className="grid">
         {usage
           ? Object.entries(usage.metrics).map(([metric, row]) => {

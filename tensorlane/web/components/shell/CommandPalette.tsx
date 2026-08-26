@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-import { type NavGroup } from "@/lib/nav";
+import { type NavGroup, visibleExtraNav } from "@/lib/nav";
 import { useShell } from "@/lib/shell";
 import { canWrite } from "@/lib/permissions";
 
@@ -19,7 +19,7 @@ export function CommandPalette({
   navigation: NavGroup[];
 }) {
   const router = useRouter();
-  const { workspaces, setWorkspaceId, role } = useShell();
+  const { workspaces, setWorkspaceId, role, organization } = useShell();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
 
@@ -32,6 +32,12 @@ export function CommandPalette({
         run: () => router.push(item.href),
       })),
     );
+    const extras = visibleExtraNav(role, organization?.features).map((item) => ({
+      id: item.href,
+      label: `Go to ${item.label}`,
+      hint: "More",
+      run: () => router.push(item.href),
+    }));
     const actions: Command[] = [
       {
         id: "create-experiment",
@@ -82,8 +88,8 @@ export function CommandPalette({
           },
         ]
       : [];
-    return [...searches, ...nav, ...actions, ...switches];
-  }, [navigation, query, role, router, setWorkspaceId, workspaces]);
+    return [...searches, ...nav, ...extras, ...actions, ...switches];
+  }, [navigation, organization?.features, query, role, router, setWorkspaceId, workspaces]);
 
   const filtered = commands.filter((command) => {
     const hay = `${command.label} ${command.hint ?? ""}`.toLowerCase();

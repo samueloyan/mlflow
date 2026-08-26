@@ -9,23 +9,27 @@ export function MetricCard({
   delta,
   hint,
   icon,
+  iconTone = "primary",
   series,
+  seriesColor,
 }: {
   label: string;
   value: ReactNode;
   delta?: { value: string; direction: "up" | "down" | "flat" };
   hint?: string;
   icon?: string;
+  iconTone?: "primary" | "success" | "info" | "danger";
   series?: number[];
+  seriesColor?: string;
 }) {
   return (
-    <div className="card">
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+    <div className="card metric-card">
+      <div className="metric-card-top">
         <p className="kicker" style={{ marginBottom: 0 }}>
           {label}
         </p>
         {icon ? (
-          <span style={{ color: "var(--color-primary)" }}>
+          <span className="icon-tile" data-tone={iconTone}>
             <Icon name={icon} />
           </span>
         ) : null}
@@ -33,7 +37,7 @@ export function MetricCard({
       <div className="metric" style={{ marginTop: 10 }}>
         {value}
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 8, marginTop: 8 }}>
+      <div className="metric-card-foot">
         <div>
           {delta ? <div className={`metric-delta ${delta.direction}`}>{delta.value}</div> : null}
           {hint ? (
@@ -42,7 +46,7 @@ export function MetricCard({
             </p>
           ) : null}
         </div>
-        {series && series.length > 1 ? <Sparkline values={series} /> : null}
+        {series && series.length > 1 ? <Sparkline values={series} color={seriesColor} /> : null}
       </div>
     </div>
   );

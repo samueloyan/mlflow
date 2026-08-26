@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { Avatar } from "@/components/ui/Avatar";
 import { Icon } from "@/components/ui/Icons";
 import { Wordmark } from "@/components/Wordmark";
 import { isActivePath, type NavGroup } from "@/lib/nav";
@@ -24,7 +25,8 @@ export function Sidebar({
   onMobileToggle: () => void;
 }) {
   const pathname = usePathname();
-  const { me, organization, role } = useShell();
+  const { me, role } = useShell();
+  const displayName = me?.name || me?.email || "User";
 
   return (
     <aside className="sidebar" data-open={mobileOpen}>
@@ -32,14 +34,6 @@ export function Sidebar({
         <Wordmark tone="light" />
         <button type="button" className="nav-toggle" aria-expanded={mobileOpen} onClick={onMobileToggle}>
           Menu
-        </button>
-        <button
-          type="button"
-          className="sidebar-collapse"
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          onClick={onToggleCollapsed}
-        >
-          <Icon name={collapsed ? "chevron" : "collapse"} />
         </button>
       </div>
       <ContextSwitchers collapsed={collapsed} />
@@ -62,11 +56,22 @@ export function Sidebar({
         ))}
       </nav>
       <div className="sidebar-foot">
-        <span className="userchip">{me?.name || me?.email}</span>
-        <span className="plan-chip">
-          {role ? role : "member"}
-          {organization ? ` · ${organization.plan}` : ""}
-        </span>
+        <div className="sidebar-user">
+          <Avatar name={displayName} />
+          <span className="sidebar-user-copy">
+            <strong>{displayName}</strong>
+            <small>{role ? role[0]?.toUpperCase() + role.slice(1) : "Member"}</small>
+          </span>
+        </div>
+        <button
+          type="button"
+          className="sidebar-collapse"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          onClick={onToggleCollapsed}
+        >
+          <Icon name={collapsed ? "chevron" : "collapse"} />
+          <span>{collapsed ? "Expand" : "Collapse"}</span>
+        </button>
       </div>
     </aside>
   );
