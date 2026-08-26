@@ -1,0 +1,13 @@
+web
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+*.egg-info
+.venv
+**/*.db
+scripts/dev.sh
+scripts/dev-full.sh
+scripts/smoke_tracking.py
+scripts/test.sh
+.git
+node_modules

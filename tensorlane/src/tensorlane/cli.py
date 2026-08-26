@@ -12,7 +12,7 @@ from tensorlane.api.app import create_app
 from tensorlane.config import Settings
 from tensorlane.db.session import configure_session, create_schema, session_factory
 from tensorlane.jobs import run_once
-from tensorlane.mlflow_admin import HttpMlflowAdmin, NullMlflowAdmin
+from tensorlane.mlflow_admin import HttpMlflowAdmin, NullMlflowAdmin, admin_from_settings
 from tensorlane.seed import seed_demo, sync_workspaces
 
 log = logging.getLogger("tensorlane.cli")
@@ -24,11 +24,7 @@ def _serve(args: argparse.Namespace) -> None:
 
 
 def _mlflow_admin(settings: Settings) -> HttpMlflowAdmin | NullMlflowAdmin:
-    if settings.mlflow_internal_uri.startswith("null://"):
-        return NullMlflowAdmin()
-    return HttpMlflowAdmin(
-        settings.mlflow_internal_uri, static_prefix=settings.mlflow_static_prefix
-    )
+    return admin_from_settings(settings)
 
 
 def _seed(_: argparse.Namespace) -> None:
@@ -56,7 +52,9 @@ def _sync_workspaces(_: argparse.Namespace) -> None:
     create_schema()
     session = session_factory()()
     try:
-        names = sync_workspaces(session, _mlflow_admin(settings))
+        names = sync_workspaces(
+            session, _mlflow_admin(settings), artifact_root=settings.artifact_root
+        )
         session.commit()
         print(json.dumps({"workspaces": names}, indent=2))
     finally:

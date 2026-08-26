@@ -1,0 +1,28 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    MALLOC_ARENA_MAX=2 \
+    MLFLOW_INTERNAL_URI=http://127.0.0.1:5000 \
+    MLFLOW_STATIC_PREFIX=/mlflow \
+    WEB_INTERNAL_URI="" \
+    ARTIFACT_ROOT=file:///var/mlflow/artifacts \
+    MLFLOW_BACKEND_STORE_URI=sqlite:////var/mlflow/mlflow.db
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tini \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /var/mlflow/artifacts
+
+COPY pyproject.toml README.md ./
+COPY src ./src
+COPY scripts/start-production.sh ./scripts/start-production.sh
+
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir ".[postgres]" "mlflow==3.15.1" "psycopg2-binary" "boto3" \
+    && chmod +x ./scripts/start-production.sh
+
+EXPOSE 8080
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["./scripts/start-production.sh"]

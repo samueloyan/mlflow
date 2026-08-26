@@ -167,3 +167,66 @@ def test_sync_workspaces_creates_every_live_workspace(db, two_tenants):
     assert two_tenants["acme_ws"].mlflow_workspace_name in names
     assert two_tenants["other_ws"].mlflow_workspace_name in names
     assert admin.created[0][0] == names[0]
+
+
+def test_sync_workspaces_rebases_artifact_root(db, two_tenants):
+    from tensorlane.mlflow_admin import NullMlflowAdmin
+    from tensorlane.seed import sync_workspaces, workspace_artifact_root
+
+    ws = two_tenants["acme_ws"]
+    ws.artifact_root = "file:///tmp/old/org/x/workspace/y"
+    db.flush()
+    admin = NullMlflowAdmin()
+    sync_workspaces(db, admin, artifact_root="file:///var/mlflow/artifacts")
+    db.flush()
+    expected = workspace_artifact_root("file:///var/mlflow/artifacts", ws.organization_id, ws.id)
+    db.refresh(ws)
+    assert ws.artifact_root == expected
+    assert admin.created[0][1] == expected
+
+
+def test_cors_allow_origins_splits_and_dedupes():
+    from tensorlane.config import Settings
+
+    settings = Settings(
+        web_origin="https://tensorla.vercel.app, https://preview.example",
+        public_url="https://tensorla.vercel.app/",
+        cors_origins="http://localhost:3000",
+    )
+    assert settings.cors_allow_origins() == [
+        "https://tensorla.vercel.app",
+        "https://preview.example",
+        "http://localhost:3000",
+    ]
+
+
+def test_sqlalchemy_database_url_uses_psycopg():
+    from tensorlane.db.session import sqlalchemy_database_url
+
+    assert sqlalchemy_database_url("sqlite:///./tensorlane.db") == "sqlite:///./tensorlane.db"
+    assert sqlalchemy_database_url("postgresql://u:p@h/db?sslmode=require") == (
+        "postgresql+psycopg://u:p@h/db?sslmode=require"
+    )
+    assert sqlalchemy_database_url("postgres://u:p@h/db") == "postgresql+psycopg://u:p@h/db"
+    assert sqlalchemy_database_url("postgresql+psycopg2://u:p@h/db") == (
+        "postgresql+psycopg2://u:p@h/db"
+    )
+
+
+def test_boot_sync_does_not_crash_when_mlflow_is_down(tmp_path):
+    from fastapi.testclient import TestClient
+    from tensorlane.api.app import create_app
+    from tensorlane.config import Settings
+
+    settings = Settings(
+        database_url=f"sqlite:///{tmp_path}/tensorlane.db",
+        mlflow_internal_uri="http://127.0.0.1:9",
+        tensorlane_pepper="test-pepper",
+        web_origin="http://testserver",
+        public_url="http://testserver",
+        control_plane_rpm=0,
+        mlflow_write_rpm=0,
+        trace_ingest_rpm=0,
+    )
+    with TestClient(create_app(settings)) as client:
+        assert client.get("/health").json() == {"status": "ok", "service": "tensorlane"}

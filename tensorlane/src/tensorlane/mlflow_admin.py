@@ -4,6 +4,7 @@ from typing import Protocol
 
 import httpx
 
+from tensorlane.config import Settings
 from tensorlane.mlflow_paths import mlflow_internal_url
 
 
@@ -50,6 +51,14 @@ class HttpMlflowAdmin:
             raise RuntimeError(
                 f"MLflow delete_workspace failed: {response.status_code} {response.text}"
             )
+
+
+def admin_from_settings(settings: Settings) -> HttpMlflowAdmin | NullMlflowAdmin:
+    if settings.mlflow_internal_uri.startswith("null://"):
+        return NullMlflowAdmin()
+    return HttpMlflowAdmin(
+        settings.mlflow_internal_uri, static_prefix=settings.mlflow_static_prefix
+    )
 
 
 class NullMlflowAdmin:

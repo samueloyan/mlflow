@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -35,9 +36,13 @@ from tensorlane.errors import (
     error_body,
 )
 from tensorlane.ids import new_request_id
+from tensorlane.mlflow_admin import admin_from_settings
 from tensorlane.mlflow_paths import mlflow_upstream_path
 from tensorlane.ratelimit import allow
+from tensorlane.seed import sync_workspaces
 from tensorlane.services import api_key_role, get_membership, usage_sum, workspace_by_mlflow_name
+
+log = logging.getLogger("tensorlane.api")
 
 HOP_BY_HOP = {
     "connection",
@@ -148,12 +153,26 @@ def _filter_request_headers(request: Request, *, strip_credentials: bool) -> dic
     return headers
 
 
+def _sync_workspaces_on_boot(settings: Settings) -> None:
+    if settings.mlflow_internal_uri.startswith("null://"):
+        return
+    with session_scope() as session:
+        names = sync_workspaces(
+            session, admin_from_settings(settings), artifact_root=settings.artifact_root
+        )
+    log.info("workspace_sync_on_boot count=%s", len(names))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: Settings = app.state.settings
     configure_session(settings)
     create_schema()
     app.state.http = httpx.AsyncClient(timeout=60.0)
+    try:
+        _sync_workspaces_on_boot(settings)
+    except Exception:
+        log.exception("workspace_sync_on_boot_failed")
     yield
     await app.state.http.aclose()
 
@@ -167,7 +186,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[settings.web_origin, settings.public_url],
+        allow_origins=settings.cors_allow_origins(),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

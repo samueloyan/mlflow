@@ -1,0 +1,50 @@
+# Tensorlane production compute. Dashboard stays on Vercel (tensorla).
+# Apply from https://dashboard.render.com/blueprint/new?repo=https://github.com/samueloyan/mlflow
+# Select branch cursor/local-full-stack-97de. Do not regenerate TENSORLANE_PEPPER.
+services:
+  - type: web
+    name: tensorlane-gateway
+    runtime: docker
+    plan: starter
+    region: ohio
+    branch: cursor/local-full-stack-97de
+    dockerfilePath: ./tensorlane/Dockerfile.runtime
+    dockerContext: ./tensorlane
+    healthCheckPath: /health
+    numInstances: 1
+    buildFilter:
+      paths:
+        - tensorlane/**
+        - render.yaml
+        - deploy/production.env.example
+    disk:
+      name: mlflow-data
+      mountPath: /var/mlflow
+      sizeGB: 10
+    envVars:
+      - key: WEB_ORIGIN
+        value: https://tensorla.vercel.app
+      - key: PUBLIC_URL
+        value: https://tensorla.vercel.app
+      - key: ENVIRONMENT
+        value: production
+      - key: MLFLOW_INTERNAL_URI
+        value: http://127.0.0.1:5000
+      - key: MLFLOW_STATIC_PREFIX
+        value: /mlflow
+      - key: ARTIFACT_ROOT
+        value: file:///var/mlflow/artifacts
+      - key: CONTROL_PLANE_RPM
+        value: "0"
+      - key: MLFLOW_WRITE_RPM
+        value: "0"
+      - key: TRACE_INGEST_RPM
+        value: "0"
+      - key: DATABASE_URL
+        sync: false
+      - key: MLFLOW_BACKEND_STORE_URI
+        sync: false
+      - key: TENSORLANE_PEPPER
+        sync: false
+      - key: TENSORLANE_SECRET_KEY
+        sync: false
