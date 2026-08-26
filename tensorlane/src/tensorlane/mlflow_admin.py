@@ -49,11 +49,35 @@ class HttpMlflowAdmin:
         )
         if response.status_code in {200, 201}:
             return
-        if response.status_code == 409:
+        if self._already_exists(response):
+            self._ensure_artifact_root(name, default_artifact_root)
             return
         raise RuntimeError(
             f"MLflow create_workspace failed: {response.status_code} {response.text}"
         )
+
+    def _already_exists(self, response: httpx.Response) -> bool:
+        if response.status_code == 409:
+            return True
+        if response.status_code != 400:
+            return False
+        try:
+            payload = response.json()
+        except ValueError:
+            return "RESOURCE_ALREADY_EXISTS" in (response.text or "")
+        code = payload.get("error_code") if isinstance(payload, dict) else None
+        return code == "RESOURCE_ALREADY_EXISTS"
+
+    def _ensure_artifact_root(self, name: str, default_artifact_root: str) -> None:
+        response = httpx.patch(
+            self._url(f"/api/3.0/mlflow/workspaces/{name}"),
+            json={"default_artifact_root": default_artifact_root},
+            timeout=self._timeout,
+        )
+        if response.status_code >= 400:
+            raise RuntimeError(
+                f"MLflow update_workspace failed: {response.status_code} {response.text}"
+            )
 
     def delete_workspace(self, name: str) -> None:
         response = httpx.delete(

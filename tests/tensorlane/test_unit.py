@@ -330,3 +330,37 @@ def test_set_usage_upserts(db, two_tenants):
     set_usage(db, org_id, "storage_gb", 0.25, "storage:test")
     db.flush()
     assert usage_sum(db, org_id, "storage_gb") == 0.25
+
+
+def test_create_workspace_treats_already_exists_and_patches_root(monkeypatch):
+    from tensorlane.mlflow_admin import HttpMlflowAdmin
+
+    calls: list[tuple[str, str, dict | None]] = []
+
+    class _Resp:
+        def __init__(self, status: int, payload: dict | None = None, text: str = ""):
+            self.status_code = status
+            self._payload = payload
+            self.text = text
+
+        def json(self):
+            if self._payload is None:
+                raise ValueError("no json")
+            return self._payload
+
+    def fake_post(url, **kwargs):
+        calls.append(("POST", url, kwargs.get("json")))
+        return _Resp(400, {"error_code": "RESOURCE_ALREADY_EXISTS"})
+
+    def fake_patch(url, **kwargs):
+        calls.append(("PATCH", url, kwargs.get("json")))
+        return _Resp(200, {})
+
+    monkeypatch.setattr("tensorlane.mlflow_admin.httpx.post", fake_post)
+    monkeypatch.setattr("tensorlane.mlflow_admin.httpx.patch", fake_patch)
+    admin = HttpMlflowAdmin("http://127.0.0.1:5000")
+    admin.create_workspace("ws-abc", "file:///var/mlflow/artifacts/org/x", "Production")
+    assert calls[0][0] == "POST"
+    assert calls[1][0] == "PATCH"
+    assert calls[1][1].endswith("/api/3.0/mlflow/workspaces/ws-abc")
+    assert calls[1][2] == {"default_artifact_root": "file:///var/mlflow/artifacts/org/x"}
