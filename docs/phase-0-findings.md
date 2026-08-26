@@ -199,15 +199,15 @@ Sign-in, org/workspace switch, keys, embed/proxy MLflow UI.
 **Phase 1f — Isolation + compatibility tests**  
 Org A vs Org B matrix; SDK golden path. **Phase 1 done when these pass.**
 
-**Phase 2** — Entitlements, usage events, Stripe, audit API/UI, billing portal.
+**Phase 2** — Entitlements, usage events, Stripe (or sandbox), audit API/UI, billing portal. Implemented in `tensorlane/` (this follow-on).
 
-**Phase 3** — Productize tracing/prompts/eval (mostly UI + search/filter + comparisons on upstream data).
+**Phase 3** — Productize tracing/prompts/eval (UI + search/filter + saved views on upstream data). Implemented as Tensorlane surfaces that read the data plane; no MLflow table rewrite.
 
-**Phase 4** — SSO/SCIM, dedicated isolation, advanced RBAC, retention.
+**Phase 4** — SSO/SCIM, dedicated isolation, restricted workspace ACL, retention policy + scan jobs.
 
-**Phase 5** — Differentiation (monitoring, cost, approvals).
+**Phase 5** — Differentiation: monitoring alerts, cost, approvals.
 
-Do not implement 1b–5 in one PR.
+Do not treat this document as a license to edit `mlflow/` core stores.
 
 ---
 

@@ -17,14 +17,16 @@ mlflow.set_tracking_uri("https://api.tensorlane.ai")
 mlflow.set_experiment("fraud-detection")
 ```
 
-## Decisions (Phase 1)
+## Decisions
 
 | Topic | Choice |
 | --- | --- |
 | Identity | Better Auth (email/password + Google/GitHub/Microsoft). Tensorlane owns orgs. |
 | Frontend | Next.js app with Tensorlane chrome. MLflow UI at `/tracking` (iframe of `/mlflow/`). |
-| Isolation | Org members access every workspace. Roles still apply. |
+| Isolation | Default: org members access every workspace. Organizations may switch to restricted grants. |
 | Limits | Warn at 80%. Traces/runs soft. API requests throttled. Storage and seats hard. |
+| Billing | Stripe when configured; sandbox checkout otherwise. Webhooks are the source of truth. |
+| Jobs | Postgres `jobs` table. `tensorlane worker` claims rows. Redis is optional for rate limits. |
 | License | `tensorlane/` proprietary. `mlflow/` Apache 2.0. |
 
 ## Local development (no Docker)
@@ -53,6 +55,7 @@ Demo isolation tenants (API sessions only; set a password via signup to use the 
 
 ```bash
 tensorlane seed
+tensorlane worker --interval 2
 ```
 
 ## Docker Compose
@@ -83,3 +86,9 @@ docker compose -f deploy/compose/docker-compose.yml exec gateway tensorlane seed
 - The gateway overwrites `X-MLFLOW-WORKSPACE` after authorization. Clients cannot select another tenant’s workspace.
 - Authorization and cookies are stripped before traffic reaches MLflow.
 - Tensorlane errors are `{ "error": { "code", "message", "request_id" } }`. MLflow SDK routes keep MLflow JSON.
+- Invite tokens and SCIM secrets are HMAC-hashed. Raw values are shown once.
+- Stripe webhooks verify `t=` / `v1=` signatures. Event ids are idempotent.
+
+## Phases 2–5
+
+The dashboard covers billing, audit, cost, SSO/SCIM, retention, approvals, monitoring, and AI surfaces (experiments, traces, prompts, evaluations) with saved views. `GET /api/v1/plans` is public. `POST /api/v1/billing/webhook` is unauthenticated and signature-gated. SCIM 2.0 Users live at `/scim/v2`.

@@ -20,6 +20,9 @@ def settings(tmp_path: Path) -> Settings:
         artifact_root="file:///tmp/tensorlane-artifacts",
         web_origin="http://testserver",
         public_url="http://testserver",
+        control_plane_rpm=0,
+        mlflow_write_rpm=0,
+        trace_ingest_rpm=0,
     )
 
 

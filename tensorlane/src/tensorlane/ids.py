@@ -20,9 +20,18 @@ WS_MEMBER_PREFIX = "wsm"
 ACCOUNT_PREFIX = "acc"
 SESSION_PREFIX = "ses"
 VERIFICATION_PREFIX = "ver"
+INVITE_PREFIX = "inv"
+SSO_PREFIX = "sso"
+SCIM_PREFIX = "scm"
+JOB_PREFIX = "job"
+APPROVAL_PREFIX = "apr"
+ALERT_PREFIX = "alt"
+ALERT_EVENT_PREFIX = "aev"
+VIEW_PREFIX = "vew"
 
 LIVE_KEY_PREFIX = "tl_live_"
 TEST_KEY_PREFIX = "tl_test_"
+SCIM_KEY_PREFIX = "tl_scim_"
 
 
 def _encode_crockford(value: int, length: int) -> str:

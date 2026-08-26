@@ -1,3 +1,4 @@
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 
@@ -31,6 +32,25 @@ export const enabledSocialProviders = {
   microsoft: Boolean(socialProviders.microsoft),
 };
 
+async function assertPasswordAllowed(email: string | undefined): Promise<void> {
+  if (!email || !email.includes("@")) return;
+  const origin = process.env.TENSORLANE_API_ORIGIN || "http://127.0.0.1:8080";
+  try {
+    const response = await fetch(
+      `${origin}/api/v1/auth/sso-policy?email=${encodeURIComponent(email)}`,
+    );
+    if (!response.ok) return;
+    const policy = (await response.json()) as { required?: boolean; message?: string };
+    if (policy.required) {
+      throw new APIError("FORBIDDEN", {
+        message: policy.message ?? "Your organization requires SSO.",
+      });
+    }
+  } catch (error) {
+    if (error instanceof APIError) throw error;
+  }
+}
+
 export const auth = betterAuth({
   database: createAuthDatabase(),
   secret: process.env.BETTER_AUTH_SECRET || process.env.TENSORLANE_SECRET_KEY || "dev-only-secret",
@@ -46,6 +66,13 @@ export const auth = betterAuth({
     minPasswordLength: 10,
   },
   socialProviders,
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      if (ctx.path !== "/sign-in/email" && ctx.path !== "/sign-up/email") return;
+      const body = ctx.body as { email?: string } | undefined;
+      await assertPasswordAllowed(body?.email);
+    }),
+  },
   user: {
     modelName: "users",
     fields: {

@@ -4,6 +4,7 @@ const apiOrigin = process.env.TENSORLANE_API_ORIGIN || "http://127.0.0.1:8080";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
   serverExternalPackages: ["better-sqlite3", "pg"],
   async rewrites() {
     return [

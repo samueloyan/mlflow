@@ -2,15 +2,20 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
+import time
 
 import uvicorn
 
 from tensorlane.api.app import create_app
 from tensorlane.config import Settings
 from tensorlane.db.session import configure_session, create_schema, session_factory
+from tensorlane.jobs import run_once
 from tensorlane.mlflow_admin import HttpMlflowAdmin, NullMlflowAdmin
 from tensorlane.seed import seed_demo
+
+log = logging.getLogger("tensorlane.cli")
 
 
 def _serve(args: argparse.Namespace) -> None:
@@ -41,6 +46,49 @@ def _seed(_: argparse.Namespace) -> None:
         session.close()
 
 
+def _worker(args: argparse.Namespace) -> None:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    settings = Settings()
+    configure_session(settings)
+    create_schema()
+    log.info("worker_started poll=%.1fs", args.interval)
+    while True:
+        session = session_factory()()
+        job = None
+        try:
+            job = run_once(session)
+            session.commit()
+        except Exception:
+            session.rollback()
+            log.exception("worker_loop_failed")
+        finally:
+            session.close()
+        if job is None:
+            time.sleep(args.interval)
+
+
+def _orgs(_: argparse.Namespace) -> None:
+    from tensorlane.client import Tensorlane
+
+    key = os.environ.get("TENSORLANE_API_KEY")
+    if not key:
+        raise SystemExit("Set TENSORLANE_API_KEY")
+    host = os.environ.get("TENSORLANE_HOST", os.environ.get("PUBLIC_URL", "http://127.0.0.1:8080"))
+    with Tensorlane(key, host) as client:
+        print(json.dumps(client.organizations(), indent=2))
+
+
+def _usage(args: argparse.Namespace) -> None:
+    from tensorlane.client import Tensorlane
+
+    key = os.environ.get("TENSORLANE_API_KEY")
+    if not key:
+        raise SystemExit("Set TENSORLANE_API_KEY")
+    host = os.environ.get("TENSORLANE_HOST", os.environ.get("PUBLIC_URL", "http://127.0.0.1:8080"))
+    with Tensorlane(key, host) as client:
+        print(json.dumps(client.usage(args.organization_id), indent=2))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="tensorlane")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -50,6 +98,14 @@ def main() -> None:
     serve.set_defaults(func=_serve)
     seed = sub.add_parser("seed", help="Create Acme and Othercorp demo tenants")
     seed.set_defaults(func=_seed)
+    worker = sub.add_parser("worker", help="Run control-plane jobs (alerts, retention, inventory)")
+    worker.add_argument("--interval", type=float, default=2.0)
+    worker.set_defaults(func=_worker)
+    orgs = sub.add_parser("orgs", help="List organizations for TENSORLANE_API_KEY")
+    orgs.set_defaults(func=_orgs)
+    usage = sub.add_parser("usage", help="Show usage for an organization")
+    usage.add_argument("--organization-id", required=True)
+    usage.set_defaults(func=_usage)
     args = parser.parse_args()
     args.func(args)
 

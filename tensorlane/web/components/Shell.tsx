@@ -2,20 +2,13 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { UsageBanner } from "@/components/UsageBanner";
 import { Wordmark } from "@/components/Wordmark";
 import { api, type Me, type Organization, type Workspace } from "@/lib/api";
+import { isActivePath, visibleNav } from "@/lib/nav";
 import { ShellContext } from "@/lib/shell";
-
-const LINKS = [
-  { href: "/overview", label: "Overview" },
-  { href: "/tracking", label: "Workbench" },
-  { href: "/members", label: "Members" },
-  { href: "/keys", label: "Keys" },
-  { href: "/usage", label: "Usage" },
-  { href: "/settings", label: "Settings" },
-];
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -26,6 +19,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
+  const [navOpen, setNavOpen] = useState(false);
+
+  const refresh = useCallback(() => setTick((value) => value + 1), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,7 +57,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [pathname, router]);
+  }, [pathname, router, tick]);
 
   useEffect(() => {
     if (!organizationId) return;
@@ -78,7 +75,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [organizationId]);
+  }, [organizationId, tick]);
 
   useEffect(() => {
     if (workspaceId) {
@@ -86,8 +83,17 @@ export function Shell({ children }: { children: React.ReactNode }) {
     }
   }, [workspaceId]);
 
+  useEffect(() => {
+    setNavOpen(false);
+  }, [pathname]);
+
   const organization = organizations.find((org) => org.id === organizationId) ?? null;
   const workspace = workspaces.find((row) => row.id === workspaceId) ?? null;
+  const role = me?.organizations.find((row) => row.id === organization?.id)?.role ?? null;
+  const navigation = useMemo(
+    () => visibleNav(role, organization?.features),
+    [organization?.features, role],
+  );
 
   const value = useMemo(
     () => ({
@@ -96,10 +102,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
       organization,
       workspaces,
       workspace,
+      role,
       setOrganizationId: (id: string) => setOrganizationId(id),
       setWorkspaceId: (id: string) => setWorkspaceId(id),
+      refresh,
     }),
-    [me, organization, organizations, workspace, workspaces],
+    [me, organization, organizations, refresh, role, workspace, workspaces],
   );
 
   if (error) {
@@ -121,55 +129,92 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   return (
     <ShellContext.Provider value={value}>
-      <header className="topbar">
-        <div className="topbar-left">
-          <Wordmark />
-          {organization ? (
-            <select
-              className="quiet"
-              value={organization.id}
-              onChange={(event) => setOrganizationId(event.target.value)}
-              aria-label="Organization"
+      <a className="skip-link" href="#main">
+        Skip to content
+      </a>
+      <div className="app-frame">
+        <aside className="sidebar" data-open={navOpen}>
+          <div className="sidebar-brand">
+            <Wordmark />
+            <button
+              type="button"
+              className="nav-toggle"
+              aria-expanded={navOpen}
+              aria-controls="primary-nav"
+              onClick={() => setNavOpen((open) => !open)}
             >
-              {organizations.map((org) => (
-                <option key={org.id} value={org.id}>
-                  {org.name}
-                </option>
-              ))}
-            </select>
-          ) : null}
-          {workspace ? (
-            <select
-              className="quiet"
-              value={workspace.id}
-              onChange={(event) => setWorkspaceId(event.target.value)}
-              aria-label="Workspace"
-            >
-              {workspaces.map((row) => (
-                <option key={row.id} value={row.id}>
-                  {row.name}
-                </option>
-              ))}
-            </select>
-          ) : null}
-        </div>
-        <nav className="nav" aria-label="Primary">
-          {LINKS.map((link) => (
-            <Link key={link.href} href={link.href} data-active={pathname === link.href}>
-              {link.label}
-            </Link>
-          ))}
-        </nav>
-        <div className="topbar-right">
-          <span className="userchip">{me?.email}</span>
-          <form action="/api/logout" method="post">
-            <button type="submit" className="btn secondary">
-              Sign out
+              Menu
             </button>
-          </form>
+          </div>
+          <div className="sidebar-context">
+            {organization ? (
+              <label className="field">
+                <span>Organization</span>
+                <select
+                  className="quiet"
+                  value={organization.id}
+                  onChange={(event) => setOrganizationId(event.target.value)}
+                  aria-label="Organization"
+                >
+                  {organizations.map((org) => (
+                    <option key={org.id} value={org.id}>
+                      {org.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            {workspace ? (
+              <label className="field">
+                <span>Workspace</span>
+                <select
+                  className="quiet"
+                  value={workspace.id}
+                  onChange={(event) => setWorkspaceId(event.target.value)}
+                  aria-label="Workspace"
+                >
+                  {workspaces.map((row) => (
+                    <option key={row.id} value={row.id}>
+                      {row.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+          </div>
+          <nav id="primary-nav" className="sidebar-nav" aria-label="Primary">
+            {navigation.map((group) => (
+              <div key={group.label || "root"} className="nav-group">
+                {group.label ? <p className="nav-label">{group.label}</p> : null}
+                {group.items.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    data-active={isActivePath(pathname, link.href)}
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+              </div>
+            ))}
+          </nav>
+          <div className="sidebar-foot">
+            <span className="userchip">{me?.email}</span>
+            {organization ? (
+              <span className="plan-chip">{organization.plan}</span>
+            ) : null}
+            <form action="/api/logout" method="post">
+              <button type="submit" className="btn secondary">
+                Sign out
+              </button>
+            </form>
+          </div>
+        </aside>
+        <div className="main-col" id="main">
+          {organization ? <UsageBanner /> : null}
+          {children}
         </div>
-      </header>
-      {children}
+      </div>
     </ShellContext.Provider>
   );
 }

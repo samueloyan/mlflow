@@ -3,6 +3,17 @@ export type Organization = {
   name: string;
   slug: string;
   plan: string;
+  isolation_mode: string;
+  workspace_acl: string;
+  sso_enforced: boolean;
+  sso_domain: string | null;
+  retention_traces_days: number;
+  retention_runs_days: number;
+  retention_artifacts_days: number;
+  stripe_customer_id: string | null;
+  billing_email: string | null;
+  features?: Record<string, boolean>;
+  limits?: Record<string, number>;
 };
 
 export type Workspace = {
@@ -18,6 +29,16 @@ export type Member = {
   user_id: string;
   email: string;
   role: string;
+};
+
+export type Invitation = {
+  id: string;
+  email: string;
+  role: string;
+  expires_at: string | null;
+  accepted_at: string | null;
+  revoked_at: string | null;
+  invite_url?: string;
 };
 
 export type ApiKey = {
@@ -56,11 +77,73 @@ export type AuditEvent = {
   request_id: string;
 };
 
+export type Plan = {
+  id: string;
+  price_usd_month: number;
+  features: Record<string, boolean>;
+  limits: Record<string, number>;
+  limit_behavior: Record<string, string>;
+  custom: boolean;
+};
+
+export type CostReport = {
+  plan: string;
+  price_usd_month: number;
+  lines: { metric: string; quantity: number; unit_usd: number; amount_usd: number }[];
+  workspaces?: {
+    workspace_id: string | null;
+    amount_usd: number;
+    lines: { metric: string; quantity: number; unit_usd: number; amount_usd: number }[];
+  }[];
+  total_usd: number;
+};
+
+export type Approval = {
+  id: string;
+  kind: string;
+  resource_ref: string;
+  status: string;
+  note: string;
+  workspace_id: string | null;
+  requested_by: string;
+  reviewed_by: string | null;
+  created_at: string | null;
+  reviewed_at: string | null;
+};
+
+export type AlertRule = {
+  id: string;
+  name: string;
+  metric: string;
+  operator: string;
+  threshold: number;
+  window_hours: number;
+  enabled: boolean;
+  workspace_id: string | null;
+};
+
+export type AlertEvent = {
+  id: string;
+  rule_id: string;
+  value: number;
+  message: string;
+  created_at: string | null;
+};
+
+export type SavedView = {
+  id: string;
+  name: string;
+  surface: string;
+  query: Record<string, unknown>;
+  workspace_id: string | null;
+  owner_user_id: string;
+};
+
 export type Me = {
   id: string;
   email: string;
   name: string;
-  organizations: { id: string; role: string }[];
+  organizations: { id: string; role: string; name?: string; plan?: string }[];
 };
 
 type ErrorBody = {

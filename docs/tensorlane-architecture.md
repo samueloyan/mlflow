@@ -36,8 +36,9 @@ Product name: **Tensorlane**. Compatibility: **MLflow compatible**. Never “Ten
          Control Plane        Data Plane
                │                   │
     Orgs, users, keys,      MLflow-compatible
-    billing, entitlements,  engine (unmodified
-    audit, SSO config       mlflow/ + plugins)
+    billing, entitlements,      engine (unmodified
+    audit, SSO, SCIM,           mlflow/ + plugins)
+    approvals, alerts
                │                   │
                └─────────┬─────────┘
                          │
@@ -46,7 +47,8 @@ Product name: **Tensorlane**. Compatibility: **MLflow compatible**. Never “Ten
               ┌──────────┼──────────┐
               │          │          │
          PostgreSQL   Object     Redis
-         (two DBs)    storage    (limits/jobs)
+         (two DBs;    storage    (optional
+          jobs table)            rate limits)
 ```
 
 **Control plane** — Tensorlane APIs `/api/v1/*`, dashboard BFF.  
@@ -253,7 +255,7 @@ Phase 1 can omit Deployments, Integrations, and full Audit UI if APIs + tests ex
 | System | Use |
 | --- | --- |
 | MLflow Huey | Keep for native eval/scorer/prompt-optimize jobs inside the data plane |
-| Tensorlane workers (Redis + ARQ or similar) | Emails, Stripe reconciliation, usage rollup, storage inventory, retention, webhook fanout (Phase 2+) |
+| Tensorlane workers (`jobs` table + `tensorlane worker`) | Emails, Stripe reconciliation, usage rollup, storage inventory, retention, isolation provision, alert evaluation |
 
 Job records: `id`, `status`, `attempts`, timestamps, `error`, `organization_id`. Idempotent where possible.
 

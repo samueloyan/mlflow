@@ -159,11 +159,32 @@ select.quiet {
   gap: 16px;
 }
 
-.card {
-  background: var(--paper-raised);
-  border: 1px solid var(--line);
-  padding: 18px 18px 16px;
-  box-shadow: var(--shadow);
+.card.current {
+  border-color: var(--copper);
+  box-shadow: 0 18px 40px rgba(184, 90, 40, 0.12);
+}
+
+.btn:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--copper);
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: absolute;
+  left: -999px;
+  top: 12px;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 8px 12px;
+  z-index: 100;
+}
+
+.skip-link:focus {
+  left: 16px;
 }
 
 .span-4 { grid-column: span 4; }
@@ -328,6 +349,207 @@ table.data th {
 .stack {
   display: grid;
   gap: 10px;
+}
+
+.app-frame {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.sidebar {
+  background: var(--paper-raised);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  padding: 18px 14px 16px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: auto;
+}
+
+.sidebar-brand {
+  padding: 4px 6px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.nav-toggle {
+  display: none;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  padding: 6px 10px;
+  border-radius: 2px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.sidebar-context .field {
+  margin-bottom: 10px;
+}
+
+.sidebar-context select.quiet {
+  width: 100%;
+  max-width: none;
+}
+
+.sidebar-nav {
+  display: grid;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.nav-group {
+  display: grid;
+  gap: 2px;
+}
+
+.nav-label {
+  margin: 0 6px 4px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sidebar-nav a {
+  padding: 7px 10px;
+  border-radius: 2px;
+  color: var(--muted);
+}
+
+.sidebar-nav a[data-active="true"],
+.sidebar-nav a:hover {
+  color: var(--ink);
+  background: rgba(22, 20, 16, 0.05);
+}
+
+.sidebar-foot {
+  margin-top: auto;
+  padding-top: 16px;
+  display: grid;
+  gap: 8px;
+}
+
+.plan-chip {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--copper);
+}
+
+.main-col {
+  min-width: 0;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.page-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.empty {
+  border: 1px dashed var(--line-strong);
+  padding: 28px 24px;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.empty h2 {
+  font-size: 22px;
+  margin-bottom: 8px;
+}
+
+.plain-list {
+  margin: 0 0 16px;
+  padding-left: 16px;
+  color: var(--ink);
+}
+
+.usage-banner {
+  margin: 16px 20px 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.usage-banner a {
+  color: var(--copper);
+  font-weight: 600;
+}
+
+.workbench {
+  height: 100vh;
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.meter {
+  height: 6px;
+  background: var(--line);
+  margin-top: 10px;
+}
+
+.meter > i {
+  display: block;
+  height: 100%;
+  background: var(--copper);
+}
+
+.meter.warn > i { background: var(--warn); }
+.meter.danger > i { background: var(--danger); }
+
+@media (max-width: 960px) {
+  .app-frame {
+    grid-template-columns: 1fr;
+  }
+  .sidebar {
+    height: auto;
+    position: sticky;
+    z-index: 30;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .nav-toggle {
+    display: inline-flex;
+  }
+  .sidebar-nav,
+  .sidebar-foot {
+    display: none;
+  }
+  .sidebar[data-open="true"] .sidebar-nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sidebar[data-open="true"] .sidebar-foot {
+    display: grid;
+  }
+  .page-header {
+    flex-direction: column;
+  }
+  .usage-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 
 @media (max-width: 900px) {

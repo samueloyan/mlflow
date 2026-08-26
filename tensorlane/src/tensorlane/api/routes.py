@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import csv
+import io
 import re
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from tensorlane.api.common import serialize_org, workspace_visible
 from tensorlane.api.deps import (
     Principal,
     TenantContext,
@@ -45,6 +48,7 @@ from tensorlane.ids import (
 from tensorlane.mlflow_admin import MlflowAdmin
 from tensorlane.services import (
     api_key_role,
+    assert_seat_available,
     count_members,
     count_owners,
     create_api_key,
@@ -128,6 +132,17 @@ class OrganizationOut(BaseModel):
     name: str
     slug: str
     plan: str
+    isolation_mode: str = "shared"
+    workspace_acl: str = "org_wide"
+    sso_enforced: bool = False
+    sso_domain: str | None = None
+    retention_traces_days: int = 90
+    retention_runs_days: int = 365
+    retention_artifacts_days: int = 365
+    stripe_customer_id: str | None = None
+    billing_email: str | None = None
+    features: dict[str, bool] = Field(default_factory=dict)
+    limits: dict[str, float] = Field(default_factory=dict)
 
 
 class CreateWorkspaceBody(BaseModel):
@@ -198,17 +213,20 @@ def me(
     memberships = session.scalars(
         select(OrganizationMembership).where(OrganizationMembership.user_id == principal.user_id)
     ).all()
+    organizations = []
+    for membership in memberships:
+        org = session.get(Organization, membership.organization_id)
+        organizations.append({
+            "id": membership.organization_id,
+            "role": membership.role,
+            "name": org.name if org else "",
+            "plan": org.plan if org else "",
+        })
     return {
         "id": principal.user_id,
         "email": user.email if user else principal.email,
         "name": user.name if user else "",
-        "organizations": [
-            {
-                "id": m.organization_id,
-                "role": m.role,
-            }
-            for m in memberships
-        ],
+        "organizations": organizations,
     }
 
 
@@ -246,7 +264,7 @@ def create_organization(
         resource_id=org.id,
     )
     session.flush()
-    return OrganizationOut(id=org.id, name=org.name, slug=org.slug, plan=org.plan)
+    return _org_out(org)
 
 
 @router.get("/organizations")
@@ -254,6 +272,9 @@ def list_organizations(
     principal: Principal = Depends(get_principal),
     session: Session = Depends(get_session),
 ) -> list[OrganizationOut]:
+    if principal.api_key is not None:
+        org = get_organization(session, principal.api_key.organization_id)
+        return [_org_out(org)]
     if principal.user_id is None:
         return []
     rows = session.scalars(
@@ -264,7 +285,7 @@ def list_organizations(
             Organization.deleted_at.is_(None),
         )
     ).all()
-    return [OrganizationOut(id=o.id, name=o.name, slug=o.slug, plan=o.plan) for o in rows]
+    return [_org_out(o) for o in rows]
 
 
 @router.get("/organizations/{organization_id}")
@@ -294,7 +315,7 @@ def get_org(
             organization_id=org.id,
             resource_organization_id=org.id,
         )
-    return OrganizationOut(id=org.id, name=org.name, slug=org.slug, plan=org.plan)
+    return _org_out(org)
 
 
 @router.post("/workspaces", status_code=201)
@@ -374,6 +395,20 @@ def list_workspaces(
             Workspace.deleted_at.is_(None),
         )
     ).all()
+    if principal.api_key is not None and principal.api_key.workspace_id:
+        rows = [w for w in rows if w.id == principal.api_key.workspace_id]
+    rows = [
+        w
+        for w in rows
+        if workspace_visible(
+            session,
+            organization_id=org.id,
+            workspace_id=w.id,
+            user_id=principal.user_id,
+            workspace_acl=org.workspace_acl,
+            role=role,
+        )
+    ]
     return [
         WorkspaceOut(
             id=w.id,
@@ -429,8 +464,7 @@ def invite_member(
         organization_id=org.id,
         resource_organization_id=org.id,
     )
-    entitlements = EntitlementService(org.plan)
-    entitlements.enforce("members", float(count_members(session, org.id)), incoming=1)
+    assert_seat_available(session, org, incoming=1)
     user = session.scalar(select(User).where(User.email == str(body.email).lower()))
     if user is None:
         raise NotFoundError("User must sign up before being added to an organization.")
@@ -729,6 +763,54 @@ def list_audit(
     ]
 
 
+@router.get("/audit-events.csv")
+def export_audit(
+    organization_id: str,
+    principal: Principal = Depends(get_principal),
+    session: Session = Depends(get_session),
+) -> Response:
+    org = get_organization(session, organization_id)
+    role = _role_for(session, principal, org.id)
+    authorize(
+        role=role,
+        action="audit.read",
+        organization_id=org.id,
+        resource_organization_id=org.id,
+    )
+    rows = session.scalars(
+        select(AuditEvent)
+        .where(AuditEvent.organization_id == org.id)
+        .order_by(AuditEvent.created_at.desc())
+        .limit(5_000)
+    ).all()
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow([
+        "created_at",
+        "action",
+        "resource",
+        "resource_id",
+        "actor_user_id",
+        "result",
+        "request_id",
+    ])
+    for row in rows:
+        writer.writerow([
+            row.created_at.isoformat() if row.created_at else "",
+            row.action,
+            row.resource,
+            row.resource_id or "",
+            row.actor_user_id or "",
+            row.result,
+            row.request_id,
+        ])
+    return Response(
+        content=buffer.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="tensorlane-audit.csv"'},
+    )
+
+
 @router.get("/entitlements/{organization_id}")
 def entitlements(
     organization_id: str,
@@ -746,6 +828,10 @@ def entitlements(
         "features": service._doc["features"],
         "limits": service._doc["limits"],
     }
+
+
+def _org_out(org: Organization) -> OrganizationOut:
+    return OrganizationOut(**serialize_org(org))
 
 
 def _role_for(session: Session, principal: Principal, organization_id: str) -> str | None:

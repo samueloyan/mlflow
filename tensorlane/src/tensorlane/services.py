@@ -8,7 +8,15 @@ from sqlalchemy.orm import Session
 
 from tensorlane.authz import ORG_ROLES
 from tensorlane.clock import utcnow
-from tensorlane.db.models import ApiKey, Organization, OrganizationMembership, User, Workspace
+from tensorlane.db.models import (
+    ApiKey,
+    Invitation,
+    Organization,
+    OrganizationMembership,
+    User,
+    Workspace,
+)
+from tensorlane.entitlements import EntitlementService
 from tensorlane.errors import AuthenticationError, AuthorizationError, NotFoundError
 from tensorlane.ids import (
     API_KEY_ID_PREFIX,
@@ -131,6 +139,34 @@ def count_members(session: Session, organization_id: str) -> int:
         )
         or 0
     )
+
+
+def count_pending_invites(session: Session, organization_id: str) -> int:
+    return int(
+        session.scalar(
+            select(func.count())
+            .select_from(Invitation)
+            .where(
+                Invitation.organization_id == organization_id,
+                Invitation.accepted_at.is_(None),
+                Invitation.revoked_at.is_(None),
+            )
+        )
+        or 0
+    )
+
+
+def assert_seat_available(
+    session: Session,
+    organization: Organization,
+    incoming: int = 1,
+    *,
+    include_pending: bool = True,
+) -> None:
+    occupied = float(count_members(session, organization.id))
+    if include_pending:
+        occupied += float(count_pending_invites(session, organization.id))
+    EntitlementService(organization.plan).enforce("members", occupied, incoming=incoming)
 
 
 def usage_sum(session: Session, organization_id: str, metric: str) -> float:

@@ -2,23 +2,29 @@
 
 import { useEffect, useState } from "react";
 
-import { api, type Member } from "@/lib/api";
+import { api, type Invitation, type Member } from "@/lib/api";
+import { formatDate } from "@/lib/format";
 import { useShell } from "@/lib/shell";
+import { CopyButton } from "@/components/CopyButton";
+import { PageHeader } from "@/components/PageHeader";
 
 const ROLES = ["owner", "admin", "developer", "viewer", "billing"] as const;
 
 export default function MembersPage() {
-  const { me, organization } = useShell();
+  const { me, organization, role } = useShell();
   const [members, setMembers] = useState<Member[]>([]);
+  const [invites, setInvites] = useState<Invitation[]>([]);
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState("developer");
+  const [inviteRole, setInviteRole] = useState("developer");
   const [message, setMessage] = useState<string | null>(null);
-  const myRole = me.organizations.find((row) => row.id === organization?.id)?.role;
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const myRole = role ?? me.organizations.find((row) => row.id === organization?.id)?.role;
   const canManage = myRole === "owner" || myRole === "admin";
 
   async function refresh() {
     if (!organization) return;
     setMembers(await api<Member[]>(`/api/v1/organizations/${organization.id}/members`));
+    setInvites(await api<Invitation[]>(`/api/v1/organizations/${organization.id}/invitations`));
   }
 
   useEffect(() => {
@@ -29,15 +35,17 @@ export default function MembersPage() {
     event.preventDefault();
     if (!organization) return;
     setMessage(null);
+    setInviteUrl(null);
     try {
-      await api(`/api/v1/organizations/${organization.id}/members`, {
+      const created = await api<Invitation>(`/api/v1/organizations/${organization.id}/invitations`, {
         method: "POST",
-        body: JSON.stringify({ email, role }),
+        body: JSON.stringify({ email, role: inviteRole }),
       });
       setEmail("");
+      setInviteUrl(created.invite_url ?? null);
       await refresh();
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Could not add member.");
+      setMessage(err instanceof Error ? err.message : "Could not send invitation.");
     }
   }
 
@@ -68,15 +76,57 @@ export default function MembersPage() {
     }
   }
 
+  async function revoke(id: string) {
+    if (!organization) return;
+    await api(`/api/v1/organizations/${organization.id}/invitations/${id}`, { method: "DELETE" });
+    await refresh();
+  }
+
+  async function resend(id: string) {
+    if (!organization) return;
+    setMessage(null);
+    try {
+      const created = await api<Invitation>(
+        `/api/v1/organizations/${organization.id}/invitations/${id}/resend`,
+        { method: "POST" },
+      );
+      setInviteUrl(created.invite_url ?? null);
+      await refresh();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Could not resend invitation.");
+    }
+  }
+
+  const openInvites = invites.filter((row) => !row.accepted_at && !row.revoked_at);
+
   return (
     <div className="page">
-      <p className="kicker">Access</p>
-      <h1>Members</h1>
-      <p className="lede">
-        Every member of the organization can use every workspace. Roles still apply. Per-workspace
-        grants arrive in a later phase.
-      </p>
+      <PageHeader
+        kicker="Access"
+        title="Members"
+        lede={
+          organization?.workspace_acl === "restricted"
+            ? "This organization uses restricted workspace grants. Owners and admins still see every workspace."
+            : "Every member of the organization can use every workspace unless you switch ACL to restricted in Settings."
+        }
+      />
+      {organization?.limits?.members ? (
+        <p className="lede">
+          {members.length} of {organization.limits.members} seats on the {organization.plan} plan.
+        </p>
+      ) : null}
       {message ? <div className="banner danger">{message}</div> : null}
+      {inviteUrl ? (
+        <div className="banner warn">
+          Invitation created. Share this link if mail is not configured.
+          <pre className="secret" style={{ marginTop: 12 }}>
+            {inviteUrl}
+          </pre>
+          <div className="page-actions" style={{ marginTop: 12 }}>
+            <CopyButton value={inviteUrl} label="Copy invite link" />
+          </div>
+        </div>
+      ) : null}
       <div className="grid">
         <div className="card span-8">
           <table className="data">
@@ -122,10 +172,49 @@ export default function MembersPage() {
               ))}
             </tbody>
           </table>
+          {openInvites.length ? (
+            <>
+              <p className="kicker" style={{ marginTop: 24 }}>
+                Pending invitations
+              </p>
+              <table className="data">
+                <thead>
+                  <tr>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Expires</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {openInvites.map((invite) => (
+                    <tr key={invite.id}>
+                      <td>{invite.email}</td>
+                      <td>{invite.role}</td>
+                      <td>{formatDate(invite.expires_at)}</td>
+                      <td>
+                        {canManage ? (
+                          <div className="page-actions">
+                            <button type="button" className="btn secondary" onClick={() => void resend(invite.id)}>
+                              Resend
+                            </button>
+                            <button type="button" className="btn danger" onClick={() => void revoke(invite.id)}>
+                              Revoke
+                            </button>
+                          </div>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          ) : null}
         </div>
         {canManage ? (
           <form className="card span-4" onSubmit={(event) => void invite(event)}>
-            <p className="kicker">Add member</p>
+            <p className="kicker">Invite</p>
+            <p className="lede">They do not need an account yet. We email a fourteen-day link.</p>
             <label className="field">
               <span>Email</span>
               <input
@@ -138,7 +227,7 @@ export default function MembersPage() {
             </label>
             <label className="field">
               <span>Role</span>
-              <select value={role} onChange={(event) => setRole(event.target.value)}>
+              <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value)}>
                 <option value="admin">Admin</option>
                 <option value="developer">Developer</option>
                 <option value="viewer">Viewer</option>
@@ -146,7 +235,7 @@ export default function MembersPage() {
               </select>
             </label>
             <button className="btn" type="submit">
-              Add
+              Send invitation
             </button>
           </form>
         ) : null}

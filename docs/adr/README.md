@@ -10,6 +10,9 @@ ADRs capture significant Tensorlane decisions.
 | [004](./004-authentication.md) | Authentication | Accepted |
 | [005](./005-billing-metering.md) | Billing and metering | Accepted |
 | [006](./006-identity-and-defaults.md) | Identity vendor and product defaults | Accepted |
+| [007](./007-billing-provider.md) | Billing provider | Accepted |
+| [008](./008-job-runner.md) | Control-plane job runner | Accepted |
+| [009](./009-workspace-acl.md) | Workspace ACL modes | Accepted |
 
 Template:
 

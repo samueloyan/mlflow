@@ -30,7 +30,18 @@ _MATRIX: dict[str, frozenset[str]] = {
     "mlflow.write": frozenset({OWNER, ADMIN, DEVELOPER}),
     "usage.read": frozenset({OWNER, ADMIN, BILLING, DEVELOPER}),
     "billing.manage": frozenset({OWNER, BILLING}),
+    "billing.read": frozenset({OWNER, ADMIN, BILLING}),
     "audit.read": frozenset({OWNER, ADMIN}),
+    "sso.manage": frozenset({OWNER, ADMIN}),
+    "scim.manage": frozenset({OWNER, ADMIN}),
+    "retention.manage": frozenset({OWNER, ADMIN}),
+    "approvals.read": frozenset({OWNER, ADMIN, DEVELOPER, VIEWER}),
+    "approvals.request": frozenset({OWNER, ADMIN, DEVELOPER}),
+    "approvals.review": frozenset({OWNER, ADMIN}),
+    "alerts.read": frozenset({OWNER, ADMIN, DEVELOPER, VIEWER, BILLING}),
+    "alerts.manage": frozenset({OWNER, ADMIN, DEVELOPER}),
+    "cost.read": frozenset({OWNER, ADMIN, BILLING, DEVELOPER}),
+    "isolation.manage": frozenset({OWNER}),
 }
 
 

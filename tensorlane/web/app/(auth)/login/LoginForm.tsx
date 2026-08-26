@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 
 import { authClient } from "@/lib/auth-client";
+import { api } from "@/lib/api";
+import { safeNext } from "@/lib/mlflow";
 
 type Providers = {
   google: boolean;
@@ -12,8 +14,10 @@ type Providers = {
   microsoft: boolean;
 };
 
-export function LoginForm({ providers }: { providers: Providers }) {
+function LoginFormInner({ providers }: { providers: Providers }) {
   const router = useRouter();
+  const search = useSearchParams();
+  const next = safeNext(search.get("next"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -21,12 +25,23 @@ export function LoginForm({ providers }: { providers: Providers }) {
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     setMessage(null);
+    try {
+      const policy = await api<{ required: boolean; message?: string }>(
+        `/api/v1/auth/sso-policy?email=${encodeURIComponent(email)}`,
+      );
+      if (policy.required) {
+        setMessage(policy.message ?? "Your organization requires SSO.");
+        return;
+      }
+    } catch {
+      // Policy lookup is advisory; continue with password if the control plane is down.
+    }
     const result = await authClient.signIn.email({ email, password });
     if (result.error) {
       setMessage(result.error.message ?? "Sign in failed.");
       return;
     }
-    router.replace("/overview");
+    router.replace(next);
   }
 
   return (
@@ -83,8 +98,16 @@ export function LoginForm({ providers }: { providers: Providers }) {
         ) : null}
       </div>
       <p className="lede" style={{ marginTop: 24 }}>
-        New here? <Link href="/signup">Create an account</Link>
+        New here? <Link href={next === "/overview" ? "/signup" : `/signup?next=${encodeURIComponent(next)}`}>Create an account</Link>
       </p>
     </div>
+  );
+}
+
+export function LoginForm({ providers }: { providers: Providers }) {
+  return (
+    <Suspense fallback={<p className="lede">Loading…</p>}>
+      <LoginFormInner providers={providers} />
+    </Suspense>
   );
 }

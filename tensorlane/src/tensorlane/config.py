@@ -16,10 +16,23 @@ class Settings(BaseSettings):
     redis_url: str | None = None
     web_origin: str = "http://localhost:3000"
     environment: str = "development"
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_price_team: str = ""
+    stripe_price_growth: str = ""
+    smtp_url: str = ""
+    mail_from: str = "Tensorlane <noreply@tensorlane.ai>"
+    control_plane_rpm: int = 120
+    mlflow_write_rpm: int = 600
+    trace_ingest_rpm: int = 1200
 
     @property
     def is_sqlite(self) -> bool:
         return self.database_url.startswith("sqlite")
+
+    @property
+    def stripe_configured(self) -> bool:
+        return bool(self.stripe_secret_key)
 
 
 def get_settings() -> Settings:

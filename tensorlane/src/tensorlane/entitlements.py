@@ -10,6 +10,10 @@ PLANS: dict[str, dict[str, Any]] = {
             "advanced_evaluations": False,
             "audit_logs": True,
             "sso": False,
+            "scim": False,
+            "dedicated_isolation": False,
+            "approvals": False,
+            "quality_monitoring": False,
         },
         "limits": {
             "members": 5,
@@ -25,12 +29,23 @@ PLANS: dict[str, dict[str, Any]] = {
             "monthly_runs": "soft",
             "monthly_api_requests": "throttle",
         },
+        "price_usd_month": 0,
+        "unit_cost_usd": {
+            "monthly_traces": 0.00002,
+            "monthly_runs": 0.01,
+            "storage_gb": 0.23,
+            "monthly_api_requests": 0.000002,
+        },
     },
     "team": {
         "features": {
             "advanced_evaluations": False,
             "audit_logs": True,
             "sso": False,
+            "scim": False,
+            "dedicated_isolation": False,
+            "approvals": True,
+            "quality_monitoring": True,
         },
         "limits": {
             "members": 20,
@@ -46,12 +61,23 @@ PLANS: dict[str, dict[str, Any]] = {
             "monthly_runs": "soft",
             "monthly_api_requests": "throttle",
         },
+        "price_usd_month": 99,
+        "unit_cost_usd": {
+            "monthly_traces": 0.000015,
+            "monthly_runs": 0.008,
+            "storage_gb": 0.18,
+            "monthly_api_requests": 0.0000015,
+        },
     },
     "growth": {
         "features": {
             "advanced_evaluations": True,
             "audit_logs": True,
             "sso": False,
+            "scim": False,
+            "dedicated_isolation": False,
+            "approvals": True,
+            "quality_monitoring": True,
         },
         "limits": {
             "members": 50,
@@ -67,12 +93,23 @@ PLANS: dict[str, dict[str, Any]] = {
             "monthly_runs": "soft",
             "monthly_api_requests": "throttle",
         },
+        "price_usd_month": 499,
+        "unit_cost_usd": {
+            "monthly_traces": 0.00001,
+            "monthly_runs": 0.005,
+            "storage_gb": 0.12,
+            "monthly_api_requests": 0.000001,
+        },
     },
     "enterprise": {
         "features": {
             "advanced_evaluations": True,
             "audit_logs": True,
             "sso": True,
+            "scim": True,
+            "dedicated_isolation": True,
+            "approvals": True,
+            "quality_monitoring": True,
         },
         "limits": {
             "members": 10_000,
@@ -87,6 +124,13 @@ PLANS: dict[str, dict[str, Any]] = {
             "monthly_traces": "soft",
             "monthly_runs": "soft",
             "monthly_api_requests": "throttle",
+        },
+        "price_usd_month": 0,
+        "unit_cost_usd": {
+            "monthly_traces": 0.000006,
+            "monthly_runs": 0.003,
+            "storage_gb": 0.08,
+            "monthly_api_requests": 0.0000005,
         },
     },
 }
@@ -120,6 +164,32 @@ class EntitlementService:
     def is_warning(self, metric: str, current: float) -> bool:
         return current >= self.warning_threshold(metric) and not self.is_over_limit(metric, current)
 
+    @staticmethod
+    def list_plans() -> list[dict[str, Any]]:
+        out = []
+        for name, doc in PLANS.items():
+            out.append({
+                "id": name,
+                "price_usd_month": doc.get("price_usd_month", 0),
+                "features": doc["features"],
+                "limits": doc["limits"],
+                "limit_behavior": doc["limit_behavior"],
+                "custom": name == "enterprise",
+            })
+        return out
+
+    def unit_cost(self, metric: str) -> float:
+        return float(self._doc.get("unit_cost_usd", {}).get(metric, 0))
+
+    def require_feature(self, feature: str) -> None:
+        from tensorlane.errors import AuthorizationError
+
+        if not self.can_use(feature):
+            raise AuthorizationError(
+                "PLAN_FEATURE_REQUIRED",
+                f"The {self.plan} plan does not include {feature}.",
+            )
+
     def enforce(self, metric: str, current: float, incoming: float = 0) -> None:
         from tensorlane.errors import LimitExceededError, RateLimitedError
 
@@ -136,5 +206,4 @@ class EntitlementService:
             raise RateLimitedError(
                 f"Organization has reached the {metric} limit for the {self.plan} plan."
             )
-        # soft, overage, upgrade: warn via usage API, do not destroy workloads
         return

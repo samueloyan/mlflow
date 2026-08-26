@@ -160,7 +160,30 @@ services:
       MLFLOW_INTERNAL_URI: http://mlflow:5000
       ARTIFACT_ROOT: s3://${S3_BUCKET:-tensorlane}
       REDIS_URL: redis://redis:6379/0
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PRICE_TEAM: ${STRIPE_PRICE_TEAM:-}
+      STRIPE_PRICE_GROWTH: ${STRIPE_PRICE_GROWTH:-}
       PORT: "8080"
     ports:
       - "8080:8080"
+    networks: [tensorlane]
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: deploy/compose/Dockerfile.gateway
+    command: ["tensorlane", "worker", "--interval", "2"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-tensorlane}:${POSTGRES_PASSWORD:-tensorlane}@postgres:5432/tensorlane
+      TENSORLANE_PEPPER: ${TENSORLANE_PEPPER:-dev-pepper-change-me}
+      TENSORLANE_SECRET_KEY: ${TENSORLANE_SECRET_KEY:-dev-secret-change-me}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
+      MLFLOW_INTERNAL_URI: http://mlflow:5000
+      ARTIFACT_ROOT: s3://${S3_BUCKET:-tensorlane}
     networks: [tensorlane]

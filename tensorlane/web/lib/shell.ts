@@ -10,8 +10,10 @@ export type ShellState = {
   organization: Organization | null;
   workspaces: Workspace[];
   workspace: Workspace | null;
+  role: string | null;
   setOrganizationId: (id: string) => void;
   setWorkspaceId: (id: string) => void;
+  refresh: () => void;
 };
 
 export const ShellContext = createContext<ShellState | null>(null);

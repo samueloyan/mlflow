@@ -124,6 +124,16 @@ class Organization(Base):
     name: Mapped[str] = mapped_column(String(256), nullable=False)
     slug: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     plan: Mapped[str] = mapped_column(String(32), nullable=False, default="free")
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    stripe_subscription_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    billing_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    isolation_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="shared")
+    workspace_acl: Mapped[str] = mapped_column(String(32), nullable=False, default="org_wide")
+    sso_enforced: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    sso_domain: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    retention_traces_days: Mapped[int] = mapped_column(nullable=False, default=90)
+    retention_runs_days: Mapped[int] = mapped_column(nullable=False, default=365)
+    retention_artifacts_days: Mapped[int] = mapped_column(nullable=False, default=365)
     created_at: Mapped[datetime] = mapped_column(IsoDateTime(), server_default=func.now())
     deleted_at: Mapped[datetime | None] = mapped_column(IsoDateTime(), nullable=True)
 
@@ -178,6 +188,7 @@ class WorkspaceMembership(Base):
         ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
     )
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    role: Mapped[str] = mapped_column(String(32), nullable=False, default="developer")
     created_at: Mapped[datetime] = mapped_column(IsoDateTime(), server_default=func.now())
 
 
@@ -231,4 +242,141 @@ class UsageRecord(Base):
     metric: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     quantity: Mapped[float] = mapped_column(Float, nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(IsoDateTime(), server_default=func.now())
+
+
+class Invitation(Base):
+    __tablename__ = "invitations"
+
+    id: Mapped[str] = mapped_column(String(48), primary_key=True)
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    email: Mapped[str] = mapped_column(String(320), nullable=False, index=True)
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    invited_by: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(IsoDateTime(), nullable=False)
+    accepted_at: Mapped[datetime | None] = mapped_column(IsoDateTime(), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(IsoDateTime(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(IsoDateTime(), server_default=func.now())
+
+
+class SsoConnection(Base):
+    __tablename__ = "sso_connections"
+    __table_args__ = (UniqueConstraint("organization_id", "protocol", name="uq_sso_org_protocol"),)
+
+    id: Mapped[str] = mapped_column(String(48), primary_key=True)
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    protocol: Mapped[str] = mapped_column(String(16), nullable=False)
+    issuer: Mapped[str] = mapped_column(String(512), nullable=False)
+    client_id: Mapped[str] = mapped_column(String(256), nullable=False)
+    client_secret_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="configured")
+    created_at: Mapped[datetime] = mapped_column(IsoDateTime(), server_default=func.now())
+
+
+class ScimToken(Base):
+    __tablename__ = "scim_tokens"
+
+    id: Mapped[str] = mapped_column(String(48), primary_key=True)
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    token_prefix: Mapped[str] = mapped_column(String(24), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(IsoDateTime(), server_default=func.now())
+    revoked_at: Mapped[datetime | None] = mapped_column(IsoDateTime(), nullable=True)
+    last_used_at: Mapped[datetime | None] = mapped_column(IsoDateTime(), nullable=True)
+
+
+class Job(Base):
+    __tablename__ = "jobs"
+
+    id: Mapped[str] = mapped_column(String(48), primary_key=True)
+    organization_id: Mapped[str | None] = mapped_column(String(48), index=True, nullable=True)
+    kind: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="queued", index=True)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    attempts: Mapped[int] = mapped_column(nullable=False, default=0)
+    run_after: Mapped[datetime] = mapped_column(IsoDateTime(), nullable=False)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(IsoDateTime(), server_default=func.now())
+    started_at: Mapped[datetime | None] = mapped_column(IsoDateTime(), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(IsoDateTime(), nullable=True)
+
+
+class StripeEvent(Base):
+    __tablename__ = "stripe_events"
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    type: Mapped[str] = mapped_column(String(128), nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    processed_at: Mapped[datetime] = mapped_column(IsoDateTime(), server_default=func.now())
+
+
+class Approval(Base):
+    __tablename__ = "approvals"
+
+    id: Mapped[str] = mapped_column(String(48), primary_key=True)
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    workspace_id: Mapped[str | None] = mapped_column(String(48), nullable=True, index=True)
+    kind: Mapped[str] = mapped_column(String(64), nullable=False)
+    resource_ref: Mapped[str] = mapped_column(String(256), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
+    note: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    requested_by: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
+    reviewed_by: Mapped[str | None] = mapped_column(String(48), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(IsoDateTime(), server_default=func.now())
+    reviewed_at: Mapped[datetime | None] = mapped_column(IsoDateTime(), nullable=True)
+
+
+class AlertRule(Base):
+    __tablename__ = "alert_rules"
+
+    id: Mapped[str] = mapped_column(String(48), primary_key=True)
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    workspace_id: Mapped[str | None] = mapped_column(String(48), nullable=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    metric: Mapped[str] = mapped_column(String(64), nullable=False)
+    operator: Mapped[str] = mapped_column(String(8), nullable=False, default="gte")
+    threshold: Mapped[float] = mapped_column(Float, nullable=False)
+    window_hours: Mapped[int] = mapped_column(nullable=False, default=24)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(IsoDateTime(), server_default=func.now())
+
+
+class AlertEvent(Base):
+    __tablename__ = "alert_events"
+
+    id: Mapped[str] = mapped_column(String(48), primary_key=True)
+    rule_id: Mapped[str] = mapped_column(
+        ForeignKey("alert_rules.id", ondelete="CASCADE"), index=True
+    )
+    organization_id: Mapped[str] = mapped_column(String(48), index=True, nullable=False)
+    value: Mapped[float] = mapped_column(Float, nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(IsoDateTime(), server_default=func.now())
+
+
+class SavedView(Base):
+    __tablename__ = "saved_views"
+
+    id: Mapped[str] = mapped_column(String(48), primary_key=True)
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    workspace_id: Mapped[str | None] = mapped_column(String(48), nullable=True)
+    owner_user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    surface: Mapped[str] = mapped_column(String(32), nullable=False)
+    query: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(IsoDateTime(), server_default=func.now())

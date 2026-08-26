@@ -11,15 +11,31 @@ from fastapi.responses import JSONResponse, Response
 from sqlalchemy import select, text
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from tensorlane.api.common import workspace_visible
 from tensorlane.api.deps import Principal, get_principal
+from tensorlane.api.enterprise import (
+    public_router,
+    scim_router,
+    webhook_router,
+)
+from tensorlane.api.enterprise import (
+    router as enterprise_router,
+)
 from tensorlane.api.routes import _record_usage, router
 from tensorlane.authz import authorize
 from tensorlane.config import Settings
 from tensorlane.db.models import Organization, OrganizationMembership, Workspace
 from tensorlane.db.session import configure_session, create_schema, session_scope
 from tensorlane.entitlements import EntitlementService
-from tensorlane.errors import AuthorizationError, NotFoundError, TensorlaneError, error_body
+from tensorlane.errors import (
+    AuthorizationError,
+    NotFoundError,
+    RateLimitedError,
+    TensorlaneError,
+    error_body,
+)
 from tensorlane.ids import new_request_id
+from tensorlane.ratelimit import allow
 from tensorlane.services import api_key_role, get_membership, usage_sum, workspace_by_mlflow_name
 
 HOP_BY_HOP = {
@@ -60,6 +76,30 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "Permissions-Policy", "camera=(), microphone=(), geolocation=()"
         )
         return response
+
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        settings: Settings = request.app.state.settings
+        path = request.url.path
+        if path == "/api/v1/billing/webhook" or path.startswith("/scim/"):
+            return await call_next(request)
+        ip = request.client.host if request.client else "unknown"
+        try:
+            if path.startswith("/api/v1"):
+                allow(f"cp:{ip}", settings.control_plane_rpm)
+            elif path.startswith("/v1/traces") and request.method == "POST":
+                allow(f"trace:{ip}", settings.trace_ingest_rpm)
+            elif _is_mlflow_path(path) and request.method not in {"GET", "HEAD", "OPTIONS"}:
+                allow(f"mlflow:{ip}", settings.mlflow_write_rpm)
+        except RateLimitedError as exc:
+            request_id = getattr(request.state, "request_id", new_request_id())
+            return JSONResponse(
+                status_code=429,
+                content=error_body(exc, request_id),
+                headers={"Retry-After": "60"},
+            )
+        return await call_next(request)
 
 
 class RequestIdMiddleware(BaseHTTPMiddleware):
@@ -117,6 +157,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
     app = FastAPI(title="Tensorlane", version="0.1.0", lifespan=lifespan, docs_url="/api/v1/docs")
     app.state.settings = settings
+    app.add_middleware(RateLimitMiddleware)
     app.add_middleware(RequestIdMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(
@@ -127,6 +168,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(router)
+    app.include_router(enterprise_router)
+    app.include_router(public_router)
+    app.include_router(webhook_router)
+    app.include_router(scim_router)
 
     @app.exception_handler(TensorlaneError)
     async def handle_tensorlane_error(request: Request, exc: TensorlaneError) -> JSONResponse:
@@ -169,7 +214,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     async def gateway(path: str, request: Request) -> Response:
         full = "/" + path
-        if full.startswith("/api/v1") or full in {"/health", "/ready"}:
+        if full.startswith("/api/v1") or full.startswith("/scim/") or full in {"/health", "/ready"}:
             return JSONResponse(
                 {"error": {"code": "NOT_FOUND", "message": "Not found."}}, status_code=404
             )
@@ -274,6 +319,20 @@ def _bind_workspace(
     if workspace_row.deleted_at is not None:
         raise NotFoundError("Workspace not found.")
 
+    if organization.workspace_acl == "restricted" and principal.api_key is None:
+        if not workspace_visible(
+            session,
+            organization_id=organization.id,
+            workspace_id=workspace_row.id,
+            user_id=principal.user_id,
+            workspace_acl=organization.workspace_acl,
+            role=role,
+        ):
+            raise AuthorizationError(
+                "WORKSPACE_ACCESS_DENIED",
+                "You do not have permission to access this workspace.",
+            )
+
     return organization, workspace_row, role
 
 
@@ -294,11 +353,41 @@ async def _proxy_mlflow(app: FastAPI, request: Request, path: str) -> Response:
             resource_workspace_id=workspace_row.id,
         )
         if action == "mlflow.write":
-            EntitlementService(organization.plan).enforce(
+            entitlements = EntitlementService(organization.plan)
+            entitlements.enforce(
                 "monthly_api_requests",
                 usage_sum(session, organization.id, "monthly_api_requests"),
                 1,
             )
+            lowered = path.lower()
+            if "/traces" in lowered:
+                entitlements.enforce(
+                    "monthly_traces",
+                    usage_sum(session, organization.id, "monthly_traces"),
+                    1,
+                )
+                _record_usage(
+                    session,
+                    organization.id,
+                    workspace_row.id,
+                    "monthly_traces",
+                    1,
+                    idempotency_key=f"trace:{request_id}",
+                )
+            elif "/runs/create" in lowered:
+                entitlements.enforce(
+                    "monthly_runs",
+                    usage_sum(session, organization.id, "monthly_runs"),
+                    1,
+                )
+                _record_usage(
+                    session,
+                    organization.id,
+                    workspace_row.id,
+                    "monthly_runs",
+                    1,
+                    idempotency_key=f"run:{request_id}",
+                )
         _record_usage(
             session,
             organization.id,

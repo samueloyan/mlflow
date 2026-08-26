@@ -1,13 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 
 import { authClient } from "@/lib/auth-client";
+import { api } from "@/lib/api";
+import { safeNext } from "@/lib/mlflow";
 
-export default function SignupPage() {
+function SignupInner() {
   const router = useRouter();
+  const search = useSearchParams();
+  const next = safeNext(search.get("next"), "/onboarding");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -16,12 +20,23 @@ export default function SignupPage() {
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     setMessage(null);
+    try {
+      const policy = await api<{ required: boolean; message?: string }>(
+        `/api/v1/auth/sso-policy?email=${encodeURIComponent(email)}`,
+      );
+      if (policy.required) {
+        setMessage(policy.message ?? "Your organization requires SSO. Ask an admin for an invitation.");
+        return;
+      }
+    } catch {
+      // Continue; signup still creates a personal account.
+    }
     const result = await authClient.signUp.email({ name, email, password });
     if (result.error) {
       setMessage(result.error.message ?? "Sign up failed.");
       return;
     }
-    router.replace("/onboarding");
+    router.replace(next);
   }
 
   return (
@@ -66,8 +81,19 @@ export default function SignupPage() {
         </button>
       </form>
       <p className="lede" style={{ marginTop: 24 }}>
-        Already have an account? <Link href="/login">Sign in</Link>
+        Already have an account?{" "}
+        <Link href={next === "/onboarding" ? "/login" : `/login?next=${encodeURIComponent(next)}`}>
+          Sign in
+        </Link>
       </p>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={<p className="lede">Loading…</p>}>
+      <SignupInner />
+    </Suspense>
   );
 }
