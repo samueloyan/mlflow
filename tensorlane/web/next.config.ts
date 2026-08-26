@@ -9,6 +9,8 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       { source: "/api/v1/:path*", destination: `${apiOrigin}/api/v1/:path*` },
+      { source: "/mlflow", destination: `${apiOrigin}/mlflow/` },
+      { source: "/mlflow/", destination: `${apiOrigin}/mlflow/` },
       { source: "/mlflow/:path*", destination: `${apiOrigin}/mlflow/:path*` },
       { source: "/ajax-api/:path*", destination: `${apiOrigin}/ajax-api/:path*` },
       { source: "/api/2.0/:path*", destination: `${apiOrigin}/api/2.0/:path*` },

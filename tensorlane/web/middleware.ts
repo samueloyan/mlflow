@@ -2,13 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
 
 const PUBLIC_PATHS = ["/login", "/signup", "/invite"];
+const GATEWAY_PREFIXES = [
+  "/api/v1",
+  "/api/2.0",
+  "/api/3.0",
+  "/ajax-api",
+  "/mlflow",
+  "/mlflow-artifacts",
+];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/_next") ||
-    pathname === "/favicon.ico"
+    pathname === "/favicon.ico" ||
+    GATEWAY_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
   ) {
     return NextResponse.next();
   }

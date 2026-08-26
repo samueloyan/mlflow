@@ -84,6 +84,8 @@ export MLFLOW_INTERNAL_URI=http://127.0.0.1:5000
 tensorlane sync-workspaces
 ```
 
+Native Overview / Experiments / Runs talk ajax-api through the gateway. The `/tracking` iframe needs MLflow's built UI assets (the Compose image includes them). A source `mlflow server` from this checkout serves a landing-page message until `mlflow/server/js` is built.
+
 ```bash
 ./tensorlane/scripts/test.sh
 # or:
