@@ -132,7 +132,7 @@ Keep `TENSORLANE_PEPPER` and `TENSORLANE_SECRET_KEY` exactly as they are. A new 
 2. Fill the `sync: false` env vars from `deploy/production.env.example` (Neon unpooled host, existing pepper/secret).
 3. Wait until `https://tensorlane-gateway.onrender.com/health` (or your service URL) returns `{"status":"ok","service":"tensorlane"}`.
 
-One replica only while artifacts live on a local disk. If the starter plan OOMs, bump the service to Standard. The image installs PyPI `mlflow==3.15.1` so `/tracking` gets the built MLflow UI.
+Use the **Standard** instance (2 GB). Free and Starter are 512 MB; MLflow plus the gateway is killed by the OOM killer on that size. One replica only while artifacts live on a local disk. The image installs PyPI `mlflow==3.15.1` so `/tracking` gets the built MLflow UI.
 
 ### 2. Point the dashboard at the gateway
 

@@ -5,7 +5,7 @@ services:
   - type: web
     name: tensorlane-gateway
     runtime: docker
-    plan: starter
+    plan: standard
     region: ohio
     branch: cursor/local-full-stack-97de
     dockerfilePath: ./tensorlane/Dockerfile.runtime
