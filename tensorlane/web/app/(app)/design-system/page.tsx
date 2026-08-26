@@ -35,7 +35,7 @@ export default function DesignSystemPage() {
           <div className="page-actions" style={{ marginTop: 12 }}>
             <StatusBadge label="Completed" tone="success" />
             <StatusBadge label="Failed" tone="danger" />
-            <StatusBadge label="Running" tone="warning" />
+            <StatusBadge label="Running" tone="info" />
             <StatusBadge label="Healthy" tone="info" />
           </div>
         </div>
