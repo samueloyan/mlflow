@@ -65,7 +65,8 @@ PY
 echo "Starting MLflow on 127.0.0.1:${MLFLOW_PORT} (workspaces on, static prefix ${MLFLOW_STATIC_PREFIX})"
 "$MLFLOW_BIN" server \
   --backend-store-uri "sqlite:///${MLFLOW_DIR}/mlflow.db" \
-  --default-artifact-root "file://${MLFLOW_DIR}/artifacts" \
+  --artifacts-destination "${ARTIFACT_ROOT}" \
+  --default-artifact-root mlflow-artifacts:/ \
   --serve-artifacts \
   --enable-workspaces \
   --static-prefix "${MLFLOW_STATIC_PREFIX}" \

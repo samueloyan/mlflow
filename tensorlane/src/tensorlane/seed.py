@@ -83,12 +83,28 @@ def create_org_with_owner(
     session.add(workspace)
     session.flush()
     admin = mlflow or NullMlflowAdmin()
-    admin.create_workspace(mlflow_name, root, workspace_name)
+    admin.create_workspace(
+        mlflow_name, mlflow_proxied_artifact_root(org.id, workspace_id), workspace_name
+    )
     return org, workspace
 
 
 def workspace_artifact_root(artifact_root: str, organization_id: str, workspace_id: str) -> str:
-    return f"{artifact_root.rstrip('/')}/org/{organization_id}/workspace/{workspace_id}"
+    """On-disk prefix after MLflow workspace-scopes proxied artifact uploads.
+
+    The SDK sees ``mlflow-artifacts:/org/.../workspace/...``. The tracking
+    server stores that under ``workspaces/<mlflow-name>/`` inside ARTIFACT_ROOT.
+    """
+    mlflow_name = to_mlflow_workspace_name(workspace_id)
+    return (
+        f"{artifact_root.rstrip('/')}/workspaces/{mlflow_name}"
+        f"/org/{organization_id}/workspace/{workspace_id}"
+    )
+
+
+def mlflow_proxied_artifact_root(organization_id: str, workspace_id: str) -> str:
+    """Client-facing artifact URI so uploads go through the tracking server."""
+    return f"mlflow-artifacts:/org/{organization_id}/workspace/{workspace_id}"
 
 
 def sync_workspaces(
@@ -106,17 +122,15 @@ def sync_workspaces(
     names: list[str] = []
     rows = session.scalars(select(Workspace).where(Workspace.deleted_at.is_(None))).all()
     for workspace in rows:
-        root = workspace.artifact_root
         if artifact_root:
             expected = workspace_artifact_root(
                 artifact_root, workspace.organization_id, workspace.id
             )
-            if root != expected:
+            if workspace.artifact_root != expected:
                 workspace.artifact_root = expected
-                root = expected
         admin.create_workspace(
             workspace.mlflow_workspace_name,
-            root,
+            mlflow_proxied_artifact_root(workspace.organization_id, workspace.id),
             workspace.name,
         )
         names.append(workspace.mlflow_workspace_name)

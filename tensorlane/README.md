@@ -151,7 +151,7 @@ Wait until `https://tensorla-gateway.fly.dev/health` returns `{"status":"ok","se
 
 `TENSORLANE_API_ORIGIN` is read at **Next.js build time**. Set it on Vercel (Production, not Sensitive) to `https://tensorla-gateway.fly.dev` with no trailing slash, then redeploy **tensorla**.
 
-After cutover, workspace artifact roots that still say `file:///tmp/tensorlane-artifacts/...` are rewritten on `tensorlane sync-workspaces` / gateway boot to `ARTIFACT_ROOT`. Existing sqlite tracking data on a laptop or Cloud Agent VM is **not** migrated; log new runs against the Neon `mlflow` store.
+After cutover, workspace artifact roots that still say `file:///tmp/tensorlane-artifacts/...` are rewritten on `tensorlane sync-workspaces` / gateway boot to `ARTIFACT_ROOT/workspaces/<mlflow-name>/org/...`. MLflow workspaces get `mlflow-artifacts:/org/.../workspace/...` so the SDK uploads through the tracking server instead of writing a local `file://` path. Existing sqlite tracking data on a laptop or Cloud Agent VM is **not** migrated; log new runs against the Neon `mlflow` store.
 
 SDK contract is unchanged:
 

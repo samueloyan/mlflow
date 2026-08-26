@@ -67,11 +67,13 @@ MLFLOW_ARGS=(
   --port "${MLFLOW_PORT}"
   --workers 1
 )
-if [[ "${ARTIFACT_ROOT}" == s3://* ]]; then
-  MLFLOW_ARGS+=(--artifacts-destination "${ARTIFACT_ROOT}" --default-artifact-root "${ARTIFACT_ROOT}")
-else
-  MLFLOW_ARGS+=(--default-artifact-root "${ARTIFACT_ROOT}")
-fi
+# Clients must receive mlflow-artifacts:/ so uploads go through the tracking
+# server. A file:// or s3:// default-artifact-root makes the SDK write locally
+# (or require cloud credentials) instead of PUTing /api/2.0/mlflow-artifacts.
+MLFLOW_ARGS+=(
+  --artifacts-destination "${ARTIFACT_ROOT}"
+  --default-artifact-root mlflow-artifacts:/
+)
 mlflow server "${MLFLOW_ARGS[@]}" &
 
 echo "Starting Tensorlane worker"

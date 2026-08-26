@@ -151,6 +151,12 @@ def test_mlflow_upstream_path_prefixes_protocol_not_artifacts():
     assert mlflow_upstream_path("/mlflow-artifacts/artifacts/foo", "/mlflow") == (
         "/mlflow-artifacts/artifacts/foo"
     )
+    assert mlflow_upstream_path("/api/2.0/mlflow-artifacts/artifacts/run/model.pkl", "/mlflow") == (
+        "/api/2.0/mlflow-artifacts/artifacts/run/model.pkl"
+    )
+    assert mlflow_upstream_path(
+        "/ajax-api/2.0/mlflow-artifacts/artifacts/run/model.pkl", "/mlflow"
+    ) == "/ajax-api/2.0/mlflow-artifacts/artifacts/run/model.pkl"
     assert mlflow_upstream_path("/api/2.0/mlflow/runs/create", "") == "/api/2.0/mlflow/runs/create"
     assert (
         mlflow_internal_url("http://127.0.0.1:5000", "/mlflow", "/api/3.0/mlflow/workspaces")
@@ -171,7 +177,11 @@ def test_sync_workspaces_creates_every_live_workspace(db, two_tenants):
 
 def test_sync_workspaces_rebases_artifact_root(db, two_tenants):
     from tensorlane.mlflow_admin import NullMlflowAdmin
-    from tensorlane.seed import sync_workspaces, workspace_artifact_root
+    from tensorlane.seed import (
+        mlflow_proxied_artifact_root,
+        sync_workspaces,
+        workspace_artifact_root,
+    )
 
     ws = two_tenants["acme_ws"]
     ws.artifact_root = "file:///tmp/old/org/x/workspace/y"
@@ -182,7 +192,21 @@ def test_sync_workspaces_rebases_artifact_root(db, two_tenants):
     expected = workspace_artifact_root("file:///var/mlflow/artifacts", ws.organization_id, ws.id)
     db.refresh(ws)
     assert ws.artifact_root == expected
-    assert admin.created[0][1] == expected
+    assert "/workspaces/" in expected
+    assert admin.created[0][1] == mlflow_proxied_artifact_root(ws.organization_id, ws.id)
+    assert admin.created[0][1].startswith("mlflow-artifacts:/org/")
+
+
+def test_mlflow_proxied_artifact_root_is_not_a_filesystem_uri():
+    from tensorlane.seed import mlflow_proxied_artifact_root, workspace_artifact_root
+
+    org_id = "org_01example"
+    workspace_id = "ws_01example"
+    proxied = mlflow_proxied_artifact_root(org_id, workspace_id)
+    stored = workspace_artifact_root("file:///var/mlflow/artifacts", org_id, workspace_id)
+    assert proxied == "mlflow-artifacts:/org/org_01example/workspace/ws_01example"
+    assert stored.startswith("file:///var/mlflow/artifacts/workspaces/")
+    assert "org/org_01example/workspace/ws_01example" in stored
 
 
 def test_cors_allow_origins_splits_and_dedupes():
