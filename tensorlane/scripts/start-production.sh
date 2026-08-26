@@ -52,16 +52,22 @@ PY
 }
 
 echo "Starting MLflow on 127.0.0.1:${MLFLOW_PORT}"
-mlflow server \
-  --backend-store-uri "${MLFLOW_BACKEND_STORE_URI}" \
-  --default-artifact-root "${ARTIFACT_ROOT}" \
-  --serve-artifacts \
-  --enable-workspaces \
-  --static-prefix "${MLFLOW_STATIC_PREFIX}" \
-  --x-frame-options SAMEORIGIN \
-  --host 127.0.0.1 \
-  --port "${MLFLOW_PORT}" \
-  --workers 1 &
+MLFLOW_ARGS=(
+  --backend-store-uri "${MLFLOW_BACKEND_STORE_URI}"
+  --serve-artifacts
+  --enable-workspaces
+  --static-prefix "${MLFLOW_STATIC_PREFIX}"
+  --x-frame-options SAMEORIGIN
+  --host 127.0.0.1
+  --port "${MLFLOW_PORT}"
+  --workers 1
+)
+if [[ "${ARTIFACT_ROOT}" == s3://* ]]; then
+  MLFLOW_ARGS+=(--artifacts-destination "${ARTIFACT_ROOT}" --default-artifact-root "${ARTIFACT_ROOT}")
+else
+  MLFLOW_ARGS+=(--default-artifact-root "${ARTIFACT_ROOT}")
+fi
+mlflow server "${MLFLOW_ARGS[@]}" &
 
 echo "Starting Tensorlane worker"
 tensorlane worker --interval 5 &

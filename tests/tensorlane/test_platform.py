@@ -722,3 +722,149 @@ def test_scim_groups_and_cannot_remove_last_owner(client, db, two_tenants):
     alice_id = two_tenants["alice"].id
     deleted = client.delete(f"/scim/v2/Users/{alice_id}", headers=headers)
     assert deleted.status_code == 409
+
+
+def test_artifact_download_serves_workspace_files(client, db, two_tenants, tmp_path: Path):
+    acme = two_tenants["acme"]
+    ws = two_tenants["acme_ws"]
+    folder = tmp_path / "org" / acme.id / "workspace" / ws.id
+    folder.mkdir(parents=True)
+    blob = folder / "run" / "metrics.json"
+    blob.parent.mkdir()
+    blob.write_text('{"ok": true}')
+    ws.artifact_root = f"file://{folder}"
+    db.commit()
+    key = f"org/{acme.id}/workspace/{ws.id}/run/metrics.json"
+    response = client.get(
+        "/api/v1/artifacts/download",
+        params={"organization_id": acme.id, "workspace_id": ws.id, "key": key},
+        headers=_auth("alice-session"),
+    )
+    assert response.status_code == 200, response.text
+    assert b"ok" in response.content
+    denied = client.get(
+        "/api/v1/artifacts/download",
+        params={
+            "organization_id": acme.id,
+            "workspace_id": ws.id,
+            "key": f"org/{two_tenants['other'].id}/workspace/{two_tenants['other_ws'].id}/run/metrics.json",
+        },
+        headers=_auth("alice-session"),
+    )
+    assert denied.status_code == 403
+
+
+def test_alert_rejects_loopback_webhook(client, db, two_tenants):
+    acme = two_tenants["acme"]
+    acme.plan = "team"
+    db.commit()
+    created = client.post(
+        f"/api/v1/organizations/{acme.id}/alerts",
+        json={
+            "name": "bad",
+            "metric": "monthly_traces",
+            "operator": "gte",
+            "threshold": 1,
+            "delivery_url": "https://127.0.0.1/hook",
+        },
+        headers=_auth("alice-session"),
+    )
+    assert created.status_code == 409
+
+
+def test_alert_worker_posts_webhook(client, db, two_tenants, monkeypatch):
+    import socket
+
+    posted: dict[str, object] = {}
+
+    def public_addrinfo(*_args, **_kwargs):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("1.1.1.1", 443))]
+
+    monkeypatch.setattr("tensorlane.notify.socket.getaddrinfo", public_addrinfo)
+    monkeypatch.setattr(
+        "tensorlane.jobs.deliver_webhook",
+        lambda url, payload: posted.update({"url": url, "payload": payload}) or True,
+    )
+    acme = two_tenants["acme"]
+    acme.plan = "team"
+    db.add(
+        UsageRecord(
+            id=new_id(USAGE_PREFIX),
+            organization_id=acme.id,
+            workspace_id=two_tenants["acme_ws"].id,
+            metric="monthly_traces",
+            quantity=90_000,
+            idempotency_key="alert-webhook-traces",
+        )
+    )
+    db.commit()
+    created = client.post(
+        f"/api/v1/organizations/{acme.id}/alerts",
+        json={
+            "name": "traces",
+            "metric": "monthly_traces",
+            "operator": "gte",
+            "threshold": 50_000,
+            "delivery_url": "https://example.com/hooks/tensorlane",
+        },
+        headers=_auth("alice-session"),
+    )
+    assert created.status_code == 201, created.text
+    db.expire_all()
+    job = run_once(db)
+    db.commit()
+    assert job is not None
+    assert posted["url"] == "https://example.com/hooks/tensorlane"
+    assert posted["payload"]["metric"] == "monthly_traces"
+
+
+def test_storage_inventory_records_usage(db, two_tenants, tmp_path: Path):
+    from tensorlane.jobs import enqueue
+    from tensorlane.services import usage_sum
+
+    acme = two_tenants["acme"]
+    ws = two_tenants["acme_ws"]
+    folder = tmp_path / "org" / acme.id / "workspace" / ws.id
+    folder.mkdir(parents=True)
+    (folder / "blob.bin").write_bytes(b"1234567890")
+    ws.artifact_root = f"file://{folder}"
+    db.commit()
+    enqueue(db, kind="storage.inventory", organization_id=acme.id)
+    db.flush()
+    job = run_once(db)
+    db.commit()
+    assert job is not None
+    assert job.status == "succeeded"
+    assert usage_sum(db, acme.id, "storage_gb") > 0
+
+
+def test_retention_scan_deletes_stale_files(db, two_tenants, tmp_path: Path, monkeypatch):
+    import os
+
+    from tensorlane.jobs import enqueue
+    from tensorlane.mlflow_admin import NullMlflowAdmin
+
+    admin = NullMlflowAdmin()
+    monkeypatch.setattr("tensorlane.jobs.admin_from_settings", lambda _settings: admin)
+    acme = two_tenants["acme"]
+    acme.retention_artifacts_days = 1
+    ws = two_tenants["acme_ws"]
+    folder = tmp_path / "org" / acme.id / "workspace" / ws.id
+    folder.mkdir(parents=True)
+    stale = folder / "old.bin"
+    stale.write_bytes(b"old")
+    os.utime(stale, (1, 1))
+    keep = folder / "new.bin"
+    keep.write_bytes(b"new")
+    ws.artifact_root = f"file://{folder}"
+    db.commit()
+    enqueue(db, kind="retention.scan", organization_id=acme.id)
+    db.flush()
+    job = run_once(db)
+    db.commit()
+    assert job is not None
+    assert job.status == "succeeded"
+    assert not stale.exists()
+    assert keep.exists()
+    assert admin.deleted_runs
+    assert admin.deleted_traces

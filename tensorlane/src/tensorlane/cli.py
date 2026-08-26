@@ -11,7 +11,7 @@ import uvicorn
 from tensorlane.api.app import create_app
 from tensorlane.config import Settings
 from tensorlane.db.session import configure_session, create_schema, session_factory
-from tensorlane.jobs import run_once
+from tensorlane.jobs import run_once, schedule_maintenance
 from tensorlane.mlflow_admin import HttpMlflowAdmin, NullMlflowAdmin, admin_from_settings
 from tensorlane.seed import seed_demo, sync_workspaces
 
@@ -72,6 +72,8 @@ def _worker(args: argparse.Namespace) -> None:
         job = None
         try:
             job = run_once(session)
+            if job is None:
+                schedule_maintenance(session)
             session.commit()
         except Exception:
             session.rollback()

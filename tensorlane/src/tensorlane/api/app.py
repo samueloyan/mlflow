@@ -93,11 +93,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         ip = request.client.host if request.client else "unknown"
         try:
             if path.startswith("/api/v1"):
-                allow(f"cp:{ip}", settings.control_plane_rpm)
+                allow(f"cp:{ip}", settings.control_plane_rpm, redis_url=settings.redis_url)
             elif path.startswith("/v1/traces") and request.method == "POST":
-                allow(f"trace:{ip}", settings.trace_ingest_rpm)
+                allow(f"trace:{ip}", settings.trace_ingest_rpm, redis_url=settings.redis_url)
             elif _is_mlflow_path(path) and request.method not in {"GET", "HEAD", "OPTIONS"}:
-                allow(f"mlflow:{ip}", settings.mlflow_write_rpm)
+                allow(f"mlflow:{ip}", settings.mlflow_write_rpm, redis_url=settings.redis_url)
         except RateLimitedError as exc:
             request_id = getattr(request.state, "request_id", new_request_id())
             return JSONResponse(
@@ -426,6 +426,12 @@ async def _proxy_mlflow(app: FastAPI, request: Request, path: str) -> Response:
                     "monthly_runs",
                     1,
                     idempotency_key=f"run:{request_id}",
+                )
+            if "artifact" in lowered:
+                entitlements.enforce(
+                    "storage_gb",
+                    usage_sum(session, organization.id, "storage_gb"),
+                    0,
                 )
         _record_usage(
             session,

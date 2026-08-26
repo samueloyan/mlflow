@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Generator, Iterator
 from contextlib import contextmanager
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -58,6 +58,28 @@ def create_schema(engine: Engine | None = None) -> None:
     if target is None:
         raise RuntimeError("Database engine is not configured")
     Base.metadata.create_all(bind=target)
+    _ensure_columns(target)
+
+
+def _ensure_columns(engine: Engine) -> None:
+    """Add columns introduced after the first create_all (Neon already has tables)."""
+    statements = {
+        "postgresql": (
+            "ALTER TABLE alert_rules ADD COLUMN IF NOT EXISTS delivery_url VARCHAR(1024)",
+        ),
+        "sqlite": (),
+    }
+    dialect = engine.dialect.name
+    if dialect == "sqlite":
+        with engine.begin() as conn:
+            rows = conn.execute(text("PRAGMA table_info(alert_rules)")).fetchall()
+            names = {row[1] for row in rows}
+            if "delivery_url" not in names:
+                conn.execute(text("ALTER TABLE alert_rules ADD COLUMN delivery_url VARCHAR(1024)"))
+        return
+    for statement in statements.get(dialect, ()):
+        with engine.begin() as conn:
+            conn.execute(text(statement))
 
 
 @contextmanager

@@ -20,7 +20,7 @@ COPY src ./src
 COPY scripts/start-production.sh ./scripts/start-production.sh
 
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir ".[postgres]" "mlflow==3.15.1" "psycopg2-binary" "boto3" \
+    && pip install --no-cache-dir ".[postgres]" "mlflow==3.15.1" "psycopg2-binary" "boto3" "redis" \
     && chmod +x ./scripts/start-production.sh
 
 EXPOSE 8080

@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
   ...(process.env.VERCEL ? {} : { output: "standalone" as const }),
   allowedDevOrigins: ["127.0.0.1", "localhost"],
   serverExternalPackages: ["better-sqlite3", "pg"],
-  async rewrites() {
+    async rewrites() {
     if (!apiOrigin) {
       return [];
     }
@@ -21,6 +21,12 @@ const nextConfig: NextConfig = {
       { source: "/api/2.0/:path*", destination: `${apiOrigin}/api/2.0/:path*` },
       { source: "/api/3.0/:path*", destination: `${apiOrigin}/api/3.0/:path*` },
       { source: "/mlflow-artifacts/:path*", destination: `${apiOrigin}/mlflow-artifacts/:path*` },
+      { source: "/v1/traces", destination: `${apiOrigin}/v1/traces` },
+      { source: "/v1/traces/:path*", destination: `${apiOrigin}/v1/traces/:path*` },
+      { source: "/get-artifact", destination: `${apiOrigin}/get-artifact` },
+      { source: "/graphql", destination: `${apiOrigin}/graphql` },
+      { source: "/version", destination: `${apiOrigin}/version` },
+      { source: "/static-files/:path*", destination: `${apiOrigin}/static-files/:path*` },
     ];
   },
 };

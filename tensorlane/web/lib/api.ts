@@ -120,6 +120,7 @@ export type AlertRule = {
   window_hours: number;
   enabled: boolean;
   workspace_id: string | null;
+  delivery_url: string | null;
 };
 
 export type AlertEvent = {

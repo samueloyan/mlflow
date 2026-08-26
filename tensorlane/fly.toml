@@ -17,9 +17,9 @@ primary_region = "iad"
   MLFLOW_STATIC_PREFIX = "/mlflow"
   ARTIFACT_ROOT = "file:///var/mlflow/artifacts"
   TENSORLANE_DATA_DIR = "/var/mlflow"
-  CONTROL_PLANE_RPM = "0"
-  MLFLOW_WRITE_RPM = "0"
-  TRACE_INGEST_RPM = "0"
+  CONTROL_PLANE_RPM = "120"
+  MLFLOW_WRITE_RPM = "600"
+  TRACE_INGEST_RPM = "1200"
 
 [http_service]
   internal_port = 8080

@@ -27,7 +27,7 @@ export default function IntegrationsPage() {
 
   return (
     <div className="page">
-      <PageHeader kicker="Govern" title="Integrations" lede="Connect providers. Configuration is stored on the operator side until a connector API ships." />
+      <PageHeader kicker="Govern" title="Integrations" lede="Provider keys stay in your runtime. HTTPS webhooks for alert events are configured on Alerts." />
       {categories.map((category) => (
         <section key={category} style={{ marginBottom: 24 }}>
           <p className="kicker">{category}</p>
@@ -51,8 +51,9 @@ export default function IntegrationsPage() {
         <Drawer title={selected.name} onClose={() => setSelected(null)}>
           <p className="lede">{selected.description}</p>
           <p className="lede">
-            There is no public connector API yet. Point the MLflow SDK at this host and set provider keys in your runtime
-            environment, not in Tensorlane.
+            {selected.name === "Webhook"
+              ? "Create an alert rule and set an HTTPS delivery URL. Tensorlane POSTs JSON when the rule fires. Slack and PagerDuty connectors are not shipped yet."
+              : "There is no public connector API yet. Point the MLflow SDK at this host and set provider keys in your runtime environment, not in Tensorlane."}
           </p>
         </Drawer>
       ) : null}

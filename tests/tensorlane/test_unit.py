@@ -230,3 +230,103 @@ def test_boot_sync_does_not_crash_when_mlflow_is_down(tmp_path):
     )
     with TestClient(create_app(settings)) as client:
         assert client.get("/health").json() == {"status": "ok", "service": "tensorlane"}
+
+
+def test_mailer_sends_via_smtp_when_configured(monkeypatch):
+    sent: dict[str, object] = {}
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout=None):
+            sent["host"] = host
+            sent["port"] = port
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def ehlo(self):
+            return None
+
+        def starttls(self):
+            sent["tls"] = True
+
+        def login(self, user, password):
+            sent["login"] = (user, password)
+
+        def send_message(self, message):
+            sent["to"] = message["To"]
+            sent["subject"] = message["Subject"]
+
+    monkeypatch.setattr("tensorlane.mail.smtplib.SMTP", FakeSMTP)
+    from tensorlane.mail import Mailer, OutboundEmail, reset_mailer
+
+    reset_mailer()
+    mailer = Mailer(
+        smtp_url="smtp://user:s3cret@mail.example:587", mail_from="Tensorlane <noreply@t.test>"
+    )
+    mailer.send(OutboundEmail(to="a@b.test", subject="Join Acme", text="Accept: https://x"))
+    assert sent["host"] == "mail.example"
+    assert sent["port"] == 587
+    assert sent["tls"] is True
+    assert sent["login"] == ("user", "s3cret")
+    assert sent["to"] == "a@b.test"
+    reset_mailer()
+
+
+def test_delivery_url_rejects_private_and_http(monkeypatch):
+    import socket
+
+    from tensorlane.errors import ConflictError
+    from tensorlane.notify import assert_delivery_url
+
+    with pytest.raises(ConflictError, match="https"):
+        assert_delivery_url("http://example.com/hook")
+    with pytest.raises(ConflictError, match="private"):
+        assert_delivery_url("https://127.0.0.1/hook")
+
+    def public_addrinfo(*_args, **_kwargs):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))]
+
+    monkeypatch.setattr("tensorlane.notify.socket.getaddrinfo", public_addrinfo)
+    assert assert_delivery_url(" https://hooks.example.com/tl ") == "https://hooks.example.com/tl"
+
+    def private_addrinfo(*_args, **_kwargs):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.1.2.3", 443))]
+
+    monkeypatch.setattr("tensorlane.notify.socket.getaddrinfo", private_addrinfo)
+    with pytest.raises(ConflictError, match="private"):
+        assert_delivery_url("https://hooks.internal.example/tl")
+
+
+def test_measure_and_purge_local_artifacts(tmp_path):
+    from tensorlane.storage import measure_bytes, purge_older_than, workspace_prefix
+
+    root = tmp_path / "artifacts"
+    prefix = workspace_prefix(f"file://{root}", "org_a", "ws_a")
+    folder = tmp_path / "artifacts" / "org" / "org_a" / "workspace" / "ws_a"
+    folder.mkdir(parents=True)
+    keep = folder / "new.bin"
+    keep.write_bytes(b"hello")
+    stale = folder / "old.bin"
+    stale.write_bytes(b"world")
+    import os
+
+    os.utime(stale, (1, 1))
+    assert measure_bytes(prefix) == 10
+    assert purge_older_than(prefix, 1) == 1
+    assert keep.exists()
+    assert not stale.exists()
+
+
+def test_set_usage_upserts(db, two_tenants):
+    from tensorlane.services import set_usage, usage_sum
+
+    org_id = two_tenants["acme"].id
+    set_usage(db, org_id, "storage_gb", 1.5, "storage:test")
+    db.flush()
+    assert usage_sum(db, org_id, "storage_gb") == 1.5
+    set_usage(db, org_id, "storage_gb", 0.25, "storage:test")
+    db.flush()
+    assert usage_sum(db, org_id, "storage_gb") == 0.25

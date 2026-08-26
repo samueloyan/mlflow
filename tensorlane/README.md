@@ -143,7 +143,7 @@ fly secrets set \
 fly deploy
 ```
 
-Wait until `https://tensorla-gateway.fly.dev/health` returns `{"status":"ok","service":"tensorlane"}`. One Machine only while artifacts live on a volume. The image installs PyPI `mlflow==3.15.1` so `/tracking` gets the built MLflow UI.
+Wait until `https://tensorla-gateway.fly.dev/health` returns `{"status":"ok","service":"tensorlane"}`. One Machine only while artifacts live on a volume. Set `ARTIFACT_ROOT=s3://…` (and AWS or Tigris credentials) when object storage is available so artifacts survive Machine replacement. Optional: `REDIS_URL` for shared rate limits, `SMTP_URL` so invitations actually send (smtp://user:pass@host:587).
 
 `render.yaml` remains a fallback if you prefer Render Standard (also 2 GB, paid).
 
@@ -184,6 +184,8 @@ mlflow.set_experiment("fraud-detection")
 - Tensorlane errors are `{ "error": { "code", "message", "request_id" } }`. MLflow SDK routes keep MLflow JSON.
 - Invite tokens and SCIM secrets are HMAC-hashed. Raw values are shown once.
 - Stripe webhooks verify `t=` / `v1=` signatures. Event ids are idempotent.
+- Alert delivery URLs must be public HTTPS. Loopback and RFC1918 targets are rejected.
+- Control-plane / MLflow write / trace ingest RPM limits are on by default in production. `0` disables a class.
 
 ## Phases 2–5
 

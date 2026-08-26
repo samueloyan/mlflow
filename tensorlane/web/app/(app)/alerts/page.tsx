@@ -15,6 +15,7 @@ export default function AlertsPage() {
   const [name, setName] = useState("Error rate");
   const [metric, setMetric] = useState("monthly_traces");
   const [threshold, setThreshold] = useState(40000);
+  const [deliveryUrl, setDeliveryUrl] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const canManage = role === "owner" || role === "admin" || role === "developer";
 
@@ -48,6 +49,7 @@ export default function AlertsPage() {
           operator: "gte",
           threshold,
           workspace_id: workspace?.id ?? null,
+          delivery_url: deliveryUrl.trim() || null,
         }),
       });
       await refresh();
@@ -74,6 +76,7 @@ export default function AlertsPage() {
                   <th>Alert</th>
                   <th>Condition</th>
                   <th>Target</th>
+                  <th>Delivery</th>
                   <th>Status</th>
                   <th>Last triggered</th>
                 </tr>
@@ -86,6 +89,7 @@ export default function AlertsPage() {
                       {rule.metric} {rule.operator} {rule.threshold}
                     </td>
                     <td>{rule.workspace_id ? "workspace" : "organization"}</td>
+                    <td>{rule.delivery_url ? "webhook" : "in-app"}</td>
                     <td>
                       <StatusBadge label={rule.enabled ? "Enabled" : "Paused"} tone={rule.enabled ? "success" : "neutral"} />
                     </td>
@@ -115,6 +119,14 @@ export default function AlertsPage() {
             <label className="field">
               <span>Threshold</span>
               <input type="number" value={threshold} onChange={(event) => setThreshold(Number(event.target.value))} required />
+            </label>
+            <label className="field">
+              <span>Webhook URL (https)</span>
+              <input
+                value={deliveryUrl}
+                onChange={(event) => setDeliveryUrl(event.target.value)}
+                placeholder="https://hooks.example.com/tensorlane"
+              />
             </label>
             <button className="btn" type="submit">
               Create alert

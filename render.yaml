@@ -35,11 +35,11 @@ services:
       - key: ARTIFACT_ROOT
         value: file:///var/mlflow/artifacts
       - key: CONTROL_PLANE_RPM
-        value: "0"
+        value: "120"
       - key: MLFLOW_WRITE_RPM
-        value: "0"
+        value: "600"
       - key: TRACE_INGEST_RPM
-        value: "0"
+        value: "1200"
       - key: DATABASE_URL
         sync: false
       - key: MLFLOW_BACKEND_STORE_URI
