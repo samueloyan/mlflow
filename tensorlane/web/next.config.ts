@@ -27,6 +27,8 @@ const nextConfig: NextConfig = {
       { source: "/graphql", destination: `${apiOrigin}/graphql` },
       { source: "/version", destination: `${apiOrigin}/version` },
       { source: "/static-files/:path*", destination: `${apiOrigin}/static-files/:path*` },
+      { source: "/gateway", destination: `${apiOrigin}/gateway` },
+      { source: "/gateway/:path*", destination: `${apiOrigin}/gateway/:path*` },
     ];
   },
 };

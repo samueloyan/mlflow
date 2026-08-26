@@ -74,6 +74,9 @@ MLFLOW_ARGS+=(
   --artifacts-destination "${ARTIFACT_ROOT}"
   --default-artifact-root mlflow-artifacts:/
 )
+if [[ -z "${MLFLOW_CRYPTO_KEK_PASSPHRASE:-}" ]]; then
+  echo "WARNING: MLFLOW_CRYPTO_KEK_PASSPHRASE is unset; LLM provider secrets use MLflow's development passphrase" >&2
+fi
 mlflow server "${MLFLOW_ARGS[@]}" &
 
 echo "Starting Tensorlane worker"

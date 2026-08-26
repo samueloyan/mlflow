@@ -14,6 +14,7 @@ const GATEWAY_PREFIXES = [
   "/graphql",
   "/version",
   "/static-files",
+  "/gateway",
 ];
 
 export function middleware(request: NextRequest) {

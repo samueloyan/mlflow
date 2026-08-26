@@ -252,3 +252,73 @@ def test_session_workspace_cookie_binds_iframe_when_org_has_two_workspaces(tmp_p
 def test_health_and_ready(client):
     assert client.get("/health").json()["status"] == "ok"
     assert client.get("/ready").json()["status"] == "ok"
+
+
+def test_gateway_prefixes_ai_gateway_invocations(tmp_path):
+    captured.clear()
+    port = _free_port()
+
+    async def invoke(request: Request) -> JSONResponse:
+        captured["path"] = request.url.path
+        captured["workspace"] = request.headers.get("x-mlflow-workspace")
+        captured["authorization"] = request.headers.get("authorization")
+        body = await request.json()
+        captured["messages"] = body.get("messages")
+        return JSONResponse({"choices": [{"message": {"content": "ok"}}]})
+
+    starlette_app = Starlette(
+        routes=[
+            Route(
+                "/mlflow/gateway/demo/mlflow/invocations",
+                invoke,
+                methods=["POST"],
+            )
+        ]
+    )
+    config = uvicorn.Config(starlette_app, host="127.0.0.1", port=port, log_level="error")
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    _wait_for_port(port)
+    try:
+        settings = Settings(
+            database_url=f"sqlite:///{tmp_path}/tensorlane.db",
+            mlflow_internal_uri=f"http://127.0.0.1:{port}",
+            mlflow_static_prefix="/mlflow",
+            tensorlane_pepper="test-pepper",
+            artifact_root="file:///tmp/tensorlane-artifacts",
+            control_plane_rpm=0,
+            mlflow_write_rpm=0,
+        )
+        app = create_app(settings)
+        with TestClient(app) as client:
+            db = session_factory()()
+            alice = create_user(db, "alice@acme.test", "Alice")
+            create_session_token(db, alice, "alice-session")
+            acme, workspace = create_org_with_owner(db, alice, "Acme")
+            db.commit()
+            created = client.post(
+                "/api/v1/api-keys",
+                json={
+                    "name": "ci",
+                    "organization_id": acme.id,
+                    "workspace_id": workspace.id,
+                    "live": True,
+                },
+                headers={"Authorization": "Bearer alice-session"},
+            )
+            assert created.status_code == 201, created.text
+            invoked = client.post(
+                "/gateway/demo/mlflow/invocations",
+                json={"messages": [{"role": "user", "content": "hello"}]},
+                headers={"Authorization": f"Bearer {created.json()['secret']}"},
+            )
+            db.close()
+        assert invoked.status_code == 200, invoked.text
+        assert invoked.json()["choices"][0]["message"]["content"] == "ok"
+        assert captured["path"] == "/mlflow/gateway/demo/mlflow/invocations"
+        assert captured["workspace"] == workspace.mlflow_workspace_name
+        assert captured["authorization"] is None
+        assert captured["messages"][0]["content"] == "hello"
+    finally:
+        server.should_exit = True

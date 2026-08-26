@@ -48,7 +48,7 @@ export const NAV: NavGroup[] = [
       { href: "/workspaces", label: "Workspaces", icon: "workspaces", roles: BUILD_ROLES },
       { href: "/members", label: "Members", icon: "members", roles: BUILD_ROLES },
       { href: "/api-keys", label: "API Keys", icon: "keys", roles: KEY_ROLES },
-      { href: "/integrations", label: "Integrations", icon: "integrations", roles: ADMIN_ROLES },
+      { href: "/integrations", label: "Integrations", icon: "integrations", roles: KEY_ROLES },
       { href: "/usage", label: "Usage & Billing", icon: "usage", roles: BILLING_ROLES },
       { href: "/audit", label: "Audit Logs", icon: "audit", roles: ADMIN_ROLES },
       { href: "/settings", label: "Settings", icon: "settings", roles: ADMIN_ROLES },

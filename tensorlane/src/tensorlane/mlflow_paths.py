@@ -9,6 +9,10 @@ to the data plane.
 Artifact streaming (``/mlflow-artifacts``) is registered without the prefix on
 the MLflow ASGI app. REST artifact proxy routes under ``/api/2.0/mlflow-artifacts``
 stay prefixed like the rest of the tracking API so list/upload Flask handlers match.
+
+AI Gateway invocations are public at ``/gateway/...`` (SDK and OpenAI-compatible
+clients). Internally they land on the FastAPI router mounted under the static
+prefix: ``/mlflow/gateway/...``.
 """
 
 from __future__ import annotations
@@ -61,6 +65,12 @@ _READ_RPC_MARKERS = (
     "/registered-models/get",
     "/model-versions/get",
 )
+
+
+def is_gateway_path(path: str) -> bool:
+    """True for public AI Gateway invoke/passthrough routes, not CRUD ajax-api."""
+    route = path.lower().split("?", 1)[0]
+    return route == "/gateway" or route.startswith("/gateway/")
 
 
 def is_mlflow_write(path: str, method: str) -> bool:

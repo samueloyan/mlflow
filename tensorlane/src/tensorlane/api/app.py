@@ -8,7 +8,7 @@ import httpx
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from sqlalchemy import select, text
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -38,6 +38,7 @@ from tensorlane.errors import (
 from tensorlane.ids import new_request_id
 from tensorlane.mlflow_admin import admin_from_settings
 from tensorlane.mlflow_paths import (
+    is_gateway_path,
     is_get_trace_artifact,
     is_mlflow_write,
     is_trace_ingest,
@@ -76,6 +77,7 @@ MLFLOW_PREFIXES = (
     "/mlflow",
     "/static-files",
     "/version",
+    "/gateway/",
 )
 
 
@@ -464,12 +466,46 @@ async def _proxy_mlflow(app: FastAPI, request: Request, path: str) -> Response:
     headers["x-tensorlane-workspace-id"] = workspace_id
     body = await request.body()
     client: httpx.AsyncClient = app.state.http
+    gateway_timeout = (
+        httpx.Timeout(connect=10.0, read=180.0, write=60.0, pool=10.0)
+        if is_gateway_path(path)
+        else None
+    )
+    timeout = gateway_timeout if gateway_timeout is not None else httpx.USE_CLIENT_DEFAULT
+    if is_gateway_path(path) and request.method == "POST":
+        req = client.build_request(
+            request.method,
+            target,
+            headers=headers,
+            content=body or None,
+            params=request.query_params,
+            timeout=timeout,
+        )
+        upstream = await client.send(req, stream=True)
+        response_headers = {
+            k: v for k, v in upstream.headers.items() if k.lower() not in HOP_BY_HOP
+        }
+
+        async def _iter_gateway() -> AsyncIterator[bytes]:
+            try:
+                async for chunk in upstream.aiter_bytes():
+                    yield chunk
+            finally:
+                await upstream.aclose()
+
+        return StreamingResponse(
+            _iter_gateway(),
+            status_code=upstream.status_code,
+            headers=response_headers,
+            media_type=upstream.headers.get("content-type"),
+        )
     upstream = await client.request(
         request.method,
         target,
         headers=headers,
         content=body or None,
         params=request.query_params,
+        timeout=timeout,
     )
     if (
         request.method == "GET"

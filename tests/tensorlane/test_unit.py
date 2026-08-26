@@ -163,10 +163,16 @@ def test_mlflow_upstream_path_prefixes_protocol_not_artifacts():
         mlflow_internal_url("http://127.0.0.1:5000", "/mlflow", "/api/3.0/mlflow/workspaces")
         == "http://127.0.0.1:5000/mlflow/api/3.0/mlflow/workspaces"
     )
+    assert mlflow_upstream_path("/gateway/chat/mlflow/invocations", "/mlflow") == (
+        "/mlflow/gateway/chat/mlflow/invocations"
+    )
+    assert mlflow_upstream_path("/gateway/mlflow/v1/chat/completions", "/mlflow") == (
+        "/mlflow/gateway/mlflow/v1/chat/completions"
+    )
 
 
 def test_search_and_list_rpcs_are_reads():
-    from tensorlane.mlflow_paths import is_mlflow_write, is_trace_ingest
+    from tensorlane.mlflow_paths import is_gateway_path, is_mlflow_write, is_trace_ingest
 
     assert is_mlflow_write("/ajax-api/2.0/mlflow/experiments/search", "POST") is False
     assert is_mlflow_write("/ajax-api/2.0/mlflow/runs/search", "POST") is False
@@ -178,6 +184,12 @@ def test_search_and_list_rpcs_are_reads():
     assert is_trace_ingest("/ajax-api/3.0/mlflow/traces/search", "POST") is False
     assert is_trace_ingest("/ajax-api/3.0/mlflow/traces", "POST") is True
     assert is_trace_ingest("/v1/traces", "POST") is True
+    assert is_mlflow_write("/gateway/chat/mlflow/invocations", "POST") is True
+    assert is_mlflow_write("/ajax-api/3.0/mlflow/gateway/secrets/list", "GET") is False
+    assert is_mlflow_write("/ajax-api/3.0/mlflow/gateway/secrets/create", "POST") is True
+    assert is_gateway_path("/gateway/chat/mlflow/invocations") is True
+    assert is_gateway_path("/gateway/mlflow/v1/chat/completions") is True
+    assert is_gateway_path("/ajax-api/3.0/mlflow/gateway/secrets/list") is False
 
 
 def test_relative_trace_artifact_path_from_tag():
