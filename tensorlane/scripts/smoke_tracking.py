@@ -88,12 +88,16 @@ def resolve_token(args: argparse.Namespace) -> str:
         raise SystemExit("Pass --token / MLFLOW_TRACKING_TOKEN, or --email and --password")
     web = sign_in(args.web, args.email, args.password)
     try:
-        session_cookie = web.cookies.get("better-auth.session_token")
-        if not session_cookie:
-            _fail("Sign-in did not set better-auth.session_token")
+        session_cookies = [
+            (name, value)
+            for name, value in web.cookies.items()
+            if name.endswith("better-auth.session_token")
+        ]
+        if not session_cookies:
+            _fail("Sign-in did not set a better-auth session cookie")
         with httpx.Client(
             base_url=args.gateway.rstrip("/"),
-            headers={"Cookie": f"better-auth.session_token={session_cookie}"},
+            headers={"Cookie": "; ".join(f"{name}={value}" for name, value in session_cookies)},
             timeout=30.0,
         ) as gateway:
             me = gateway.get("/api/v1/me")
@@ -216,7 +220,7 @@ def main() -> None:
         "tracking_uri": args.gateway.rstrip("/"),
         "sdk": (
             "import os, mlflow\n"
-            f'os.environ["MLFLOW_TRACKING_TOKEN"] = "{token}"\n'
+            'os.environ["MLFLOW_TRACKING_TOKEN"] = "<API key from Tensorlane /api-keys>"\n'
             f'mlflow.set_tracking_uri("{args.gateway.rstrip("/")}")\n'
             f'mlflow.set_experiment("{EXPERIMENT_NAME}")\n'
         ),
