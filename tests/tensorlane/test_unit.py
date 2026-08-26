@@ -151,12 +151,12 @@ def test_mlflow_upstream_path_prefixes_protocol_not_artifacts():
     assert mlflow_upstream_path("/mlflow-artifacts/artifacts/foo", "/mlflow") == (
         "/mlflow-artifacts/artifacts/foo"
     )
-    assert mlflow_upstream_path("/api/2.0/mlflow-artifacts/artifacts/run/model.pkl", "/mlflow") == (
-        "/api/2.0/mlflow-artifacts/artifacts/run/model.pkl"
+    assert mlflow_upstream_path("/api/2.0/mlflow-artifacts/artifacts", "/mlflow") == (
+        "/mlflow/api/2.0/mlflow-artifacts/artifacts"
     )
     assert mlflow_upstream_path(
-        "/ajax-api/2.0/mlflow-artifacts/artifacts/run/model.pkl", "/mlflow"
-    ) == "/ajax-api/2.0/mlflow-artifacts/artifacts/run/model.pkl"
+        "/api/2.0/mlflow-artifacts/artifacts/run/model.pkl", "/mlflow"
+    ) == "/mlflow/api/2.0/mlflow-artifacts/artifacts/run/model.pkl"
     assert mlflow_upstream_path("/api/2.0/mlflow/runs/create", "") == "/api/2.0/mlflow/runs/create"
     assert (
         mlflow_internal_url("http://127.0.0.1:5000", "/mlflow", "/api/3.0/mlflow/workspaces")

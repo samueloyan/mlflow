@@ -6,18 +6,14 @@ AJAX routes as well as the UI. Tensorlane's public contract stays unprefixed
 does not change. The gateway and admin client prepend the prefix when talking
 to the data plane.
 
-Artifact streaming is registered without the UI prefix on the MLflow ASGI app:
-``/mlflow-artifacts`` plus the REST/AJAX artifact proxy at
-``/api/2.0/mlflow-artifacts`` and ``/ajax-api/2.0/mlflow-artifacts``.
+Artifact streaming (``/mlflow-artifacts``) is registered without the prefix on
+the MLflow ASGI app. REST artifact proxy routes under ``/api/2.0/mlflow-artifacts``
+stay prefixed like the rest of the tracking API so list/upload Flask handlers match.
 """
 
 from __future__ import annotations
 
-UNPREFIXED_INTERNAL_PATHS = (
-    "/mlflow-artifacts",
-    "/api/2.0/mlflow-artifacts",
-    "/ajax-api/2.0/mlflow-artifacts",
-)
+UNPREFIXED_INTERNAL_PATHS = ("/mlflow-artifacts",)
 
 
 def normalize_static_prefix(static_prefix: str | None) -> str:
