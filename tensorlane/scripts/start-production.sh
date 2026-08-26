@@ -51,6 +51,11 @@ sys.exit(1)
 PY
 }
 
+# A monorepo checkout has ./mlflow at the root. Starting from that cwd makes
+# `import mlflow` load the source tree (no tracking UI) instead of the PyPI
+# wheel baked into the image. Always run subprocesses from DATA_DIR.
+cd "${DATA_DIR}"
+
 echo "Starting MLflow on 127.0.0.1:${MLFLOW_PORT}"
 MLFLOW_ARGS=(
   --backend-store-uri "${MLFLOW_BACKEND_STORE_URI}"
