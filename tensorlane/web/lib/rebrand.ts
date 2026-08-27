@@ -45,8 +45,11 @@ function createIn(root: ParentNode, tag: string): HTMLElement {
 }
 
 function isLogo(svg: Element): boolean {
-  const vb = (svg.getAttribute("viewBox") || svg.getAttribute("viewbox") || "").replace(/,/g, " ");
-  if (vb.includes("109") && vb.includes("40")) return true;
+  const vb = (svg.getAttribute("viewBox") || svg.getAttribute("viewbox") || "")
+    .replace(/,/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (vb === "0 0 109 40") return true;
   if (svg.getAttribute("width") === "109" && svg.getAttribute("height") === "40") return true;
   return (svg.innerHTML || "").includes("31.0316");
 }
@@ -172,9 +175,6 @@ export function injectTrackingRebrand(doc: Document): () => void {
   observer.observe(doc.documentElement, {
     childList: true,
     subtree: true,
-    characterData: true,
-    attributes: true,
-    attributeFilter: [...ATTRS, "href", "src"],
   });
   return () => observer.disconnect();
 }

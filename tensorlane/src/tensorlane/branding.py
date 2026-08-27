@@ -58,11 +58,10 @@ REBRAND_JS = r"""
     return /mlflow\.org/i.test(v || "");
   }
   function isLogo(svg){
-    var vb = String(svg.getAttribute("viewBox") || svg.getAttribute("viewbox") || "").replace(/,/g," ");
-    if (vb.indexOf("109") >= 0 && vb.indexOf("40") >= 0) return true;
+    var vb = String(svg.getAttribute("viewBox") || svg.getAttribute("viewbox") || "").replace(/,/g," ").replace(/\s+/g," ").trim();
+    if (vb === "0 0 109 40") return true;
     if (svg.getAttribute("width") === "109" && svg.getAttribute("height") === "40") return true;
-    var inner = svg.innerHTML || "";
-    return inner.indexOf("31.0316") >= 0;
+    return (svg.innerHTML || "").indexOf("31.0316") >= 0;
   }
   function hideEl(el){
     el.style.setProperty("display","none","important");
@@ -148,8 +147,7 @@ REBRAND_JS = r"""
     finally { paused = false; }
     schedule();
   }).observe(document.documentElement,{
-    childList:true,subtree:true,characterData:true,attributes:true,
-    attributeFilter:["title","aria-label","alt","placeholder","aria-description","href","src"]
+    childList:true,subtree:true
   });
 })();
 """.strip()
