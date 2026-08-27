@@ -35,7 +35,12 @@ const TABS = [
   { id: "runs", label: "Runs" },
   { id: "models", label: "Models" },
   { id: "traces", label: "Traces" },
+  { id: "sessions", label: "Sessions" },
   { id: "evaluations", label: "Evaluations" },
+  { id: "review", label: "Review" },
+  { id: "datasets", label: "Datasets" },
+  { id: "playground", label: "Playground" },
+  { id: "prompts", label: "Prompts" },
   { id: "artifacts", label: "Artifacts" },
   { id: "settings", label: "Settings" },
 ];
@@ -129,7 +134,7 @@ function ExperimentDetailsInner() {
           Open runs
         </Link>
         <Link className="btn secondary" href="/tracking">
-          Workbench
+          Tracking UI
         </Link>
       </PageHeader>
       <Tabs items={TABS} value={tab} onChange={setTab} />
@@ -264,7 +269,7 @@ function ExperimentDetailsInner() {
               ))}
             </ul>
           )}
-          <Link href="/models">Open model registry</Link>
+          <Link href="/models?tab=logged">Open logged models</Link>
         </div>
       ) : null}
 
@@ -301,7 +306,7 @@ function ExperimentDetailsInner() {
       {tab === "evaluations" ? (
         <div className="card">
           <p className="lede">
-            Evaluation datasets stay in MLflow. Open the workbench or the Evaluations page to compare scorers.
+            Evaluation datasets and judges live in this workspace. Open Evaluations to inspect scorers.
           </p>
           <Link className="btn secondary" href="/evaluations">
             Evaluations
@@ -309,11 +314,56 @@ function ExperimentDetailsInner() {
         </div>
       ) : null}
 
+      {tab === "sessions" ? (
+        <div className="card">
+          <p className="lede">Chat sessions are grouped from traces that share a session id.</p>
+          <Link className="btn secondary" href="/sessions">
+            Sessions
+          </Link>
+        </div>
+      ) : null}
+
+      {tab === "review" ? (
+        <div className="card">
+          <p className="lede">Human review queues for traces on this experiment.</p>
+          <Link className="btn secondary" href="/review">
+            Review
+          </Link>
+        </div>
+      ) : null}
+
+      {tab === "datasets" ? (
+        <div className="card">
+          <p className="lede">Datasets logged against experiments in this workspace.</p>
+          <Link className="btn secondary" href="/datasets">
+            Datasets
+          </Link>
+        </div>
+      ) : null}
+
+      {tab === "playground" ? (
+        <div className="card">
+          <p className="lede">Invoke named endpoints against this workspace.</p>
+          <Link className="btn secondary" href="/playground">
+            Playground
+          </Link>
+        </div>
+      ) : null}
+
+      {tab === "prompts" ? (
+        <div className="card">
+          <p className="lede">Prompt versions registered in this workspace.</p>
+          <Link className="btn secondary" href="/prompts">
+            Prompts
+          </Link>
+        </div>
+      ) : null}
+
       {tab === "artifacts" ? (
         <div className="card">
-          <p className="lede">Artifact browsers remain in the workbench so upstream download flows stay intact.</p>
+          <p className="lede">Artifact browsers remain in the tracking UI so upstream download flows stay intact.</p>
           <Link className="btn secondary" href="/tracking">
-            Open workbench
+            Open tracking UI
           </Link>
         </div>
       ) : null}

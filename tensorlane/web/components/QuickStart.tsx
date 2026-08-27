@@ -50,6 +50,7 @@ export function QuickStart({ hasRun }: { hasRun: boolean }) {
       { id: "sdk", label: "Point the SDK at this workspace", href: "/onboarding", done: hasRun || keys > 0 },
       { id: "run", label: "Log first run", href: "/runs", done: hasRun },
       { id: "llm", label: "Connect an LLM provider", href: "/integrations", done: connections > 0 },
+      { id: "playground", label: "Try the playground", href: "/playground", done: connections > 0 },
       { id: "invite", label: "Invite teammate", href: "/members", done: members > 1 },
     ],
     [connections, hasRun, keys, members, organization, workspace],

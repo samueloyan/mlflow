@@ -272,7 +272,7 @@ export default function OverviewPage() {
             {loading ? (
               <TableSkeleton rows={5} cols={6} />
             ) : recentRuns.length === 0 ? (
-              <p className="lede">No runs in this workspace yet. Log one with the MLflow SDK.</p>
+              <p className="lede">No runs in this workspace yet. Log one with the Python SDK.</p>
             ) : (
               <table className="data">
                 <thead>
@@ -415,6 +415,10 @@ export default function OverviewPage() {
               <Link className="quick-action" href="/evaluations">
                 <Icon name="evaluations" />
                 New Evaluation
+              </Link>
+              <Link className="quick-action" href="/playground">
+                <Icon name="playground" />
+                Open Playground
               </Link>
               <Link className="quick-action" href="/traces">
                 <Icon name="traces" />

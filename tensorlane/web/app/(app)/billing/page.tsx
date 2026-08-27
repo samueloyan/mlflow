@@ -72,7 +72,7 @@ function BillingInner() {
       <PageHeader
         kicker="Manage"
         title="Billing"
-        lede="Plans are snapshots on the organization. Stripe (or the local sandbox) is the only writer. The MLflow path never talks to a card network."
+        lede="Plans are snapshots on the organization. Stripe (or the local sandbox) is the only writer. The tracking path never talks to a card network."
       >
         {canManage ? (
           <button type="button" className="btn secondary" onClick={() => void portal()}>

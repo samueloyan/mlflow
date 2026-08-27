@@ -32,15 +32,13 @@ export function Header({ onSearch }: { onSearch: () => void }) {
       </div>
       <button type="button" className="search-trigger" onClick={onSearch}>
         <Icon name="search" />
-        <span>Search runs, experiments, models, datasets, traces...</span>
+        <span>Search runs, experiments, models, traces, sessions...</span>
         <kbd>⌘K</kbd>
       </button>
       <div className="app-header-right">
         <a
           className="icon-btn"
-          href="https://mlflow.org/docs/latest/"
-          target="_blank"
-          rel="noreferrer"
+          href="/onboarding"
           aria-label="Documentation"
           title="Documentation"
         >

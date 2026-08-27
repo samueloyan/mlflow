@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { EmptyState, PageHeader } from "@/components/PageHeader";
 import { ErrorState } from "@/components/ui/EmptyState";
 import { SavedViews } from "@/components/SavedViews";
+import { trackingUiHref } from "@/lib/brand";
 import { formatEpoch } from "@/lib/format";
 import { useTrackingContext } from "@/lib/useTrackingContext";
 import { searchPrompts, type RegisteredModel } from "@/lib/tracking";
@@ -48,9 +49,9 @@ export default function PromptsPage() {
       <PageHeader
         kicker="AI"
         title="Prompts"
-        lede="Prompt versions are registered models in the MLflow registry. Aliases and lineage stay where the SDK already writes them."
+        lede="Prompt versions are registered in this workspace. Aliases and lineage stay where the SDK already writes them."
       >
-        <Link className="btn" href="/tracking">
+        <Link className="btn" href={trackingUiHref()}>
           Registry
         </Link>
       </PageHeader>
@@ -88,8 +89,7 @@ export default function PromptsPage() {
                     key={row.name}
                     style={{ cursor: row.name ? "pointer" : undefined }}
                     onClick={() =>
-                      row.name &&
-                      router.push(`/tracking?hash=/models/${encodeURIComponent(row.name)}`)
+                      row.name && router.push(trackingUiHref(`/models/${encodeURIComponent(row.name)}`))
                     }
                   >
                     <td>{row.name}</td>

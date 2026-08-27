@@ -461,6 +461,30 @@ export async function invokeGatewayChat(
   });
 }
 
+export function extractChatText(payload: Record<string, unknown>): string {
+  const choices = payload.choices;
+  if (Array.isArray(choices) && choices[0] && typeof choices[0] === "object") {
+    const choice = choices[0] as { message?: { content?: unknown }; text?: unknown };
+    if (typeof choice.message?.content === "string") return choice.message.content;
+    if (typeof choice.text === "string") return choice.text;
+  }
+  const content = payload.content;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    const parts = content
+      .map((part) => {
+        if (typeof part === "string") return part;
+        if (part && typeof part === "object" && "text" in part && typeof part.text === "string") {
+          return part.text;
+        }
+        return "";
+      })
+      .filter(Boolean);
+    if (parts.length) return parts.join("\n");
+  }
+  return JSON.stringify(payload, null, 2);
+}
+
 export function sdkSnippet(trackingUri: string, endpointName: string): string {
   return `import os
 from openai import OpenAI
@@ -477,7 +501,7 @@ print(client.chat.completions.create(
 
 # Native invoke:
 # POST ${trackingUri}${gatewayInvokePath(endpointName)}
-# OpenAI-compatible (mlflow v1): ${trackingUri}${gatewayChatCompletionsPath()}
+# OpenAI-compatible: ${trackingUri}${gatewayChatCompletionsPath()}
 # Anthropic: POST ${trackingUri}${gatewayAnthropicMessagesPath()}
 # Gemini: POST ${trackingUri}${gatewayGeminiGeneratePath(endpointName)}`;
 }

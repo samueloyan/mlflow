@@ -126,7 +126,7 @@ function ExperimentsInner() {
           </button>
         ) : null}
         <Link className="btn secondary" href="/tracking">
-          Workbench
+          Tracking UI
         </Link>
       </PageHeader>
       <div className="grid">

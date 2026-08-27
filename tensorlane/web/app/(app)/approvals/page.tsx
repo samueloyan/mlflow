@@ -74,7 +74,7 @@ export default function ApprovalsPage() {
           {rows.length === 0 ? (
             <EmptyState
               title="No open or recent requests"
-              body="Developers can request a change. Owners and admins review it. Nothing is applied to MLflow until a reviewer decides."
+              body="Developers can request a change. Owners and admins review it. Nothing is applied to the tracking store until a reviewer decides."
             />
           ) : (
             <table className="data">

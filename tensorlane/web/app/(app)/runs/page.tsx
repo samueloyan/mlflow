@@ -194,7 +194,7 @@ function RunsInner() {
                 </button>
               }
               emptyTitle="No runs yet"
-              emptyBody="Log a run with the MLflow SDK against this tracking host."
+              emptyBody="Log a run with the Python SDK against this tracking host."
               onRowClick={(row) => router.push(`/runs/${runId(row)}`)}
             />
           </div>

@@ -86,6 +86,18 @@ export function CommandPalette({
             hint: "Search",
             run: () => router.push(`/models?q=${encodeURIComponent(query.trim())}`),
           },
+          {
+            id: "search-sessions",
+            label: `Search sessions for “${query.trim()}”`,
+            hint: "Search",
+            run: () => router.push(`/sessions?q=${encodeURIComponent(query.trim())}`),
+          },
+          {
+            id: "search-mcp",
+            label: `Search MCP servers for “${query.trim()}”`,
+            hint: "Search",
+            run: () => router.push(`/mcp`),
+          },
         ]
       : [];
     return [...searches, ...nav, ...extras, ...actions, ...switches];

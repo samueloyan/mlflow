@@ -254,7 +254,7 @@ function RunDetailsInner() {
       {tab === "artifacts" ? (
         <div className="card">
           {files.length === 0 ? (
-            <p className="lede">No artifacts listed. Download still uses the MLflow workbench.</p>
+            <p className="lede">No artifacts listed. Download still uses the tracking UI.</p>
           ) : (
             <table className="data">
               <thead>
@@ -276,7 +276,7 @@ function RunDetailsInner() {
             </table>
           )}
           <Link className="btn secondary" href="/tracking">
-            Open in workbench
+            Open in tracking UI
           </Link>
         </div>
       ) : null}
@@ -309,7 +309,7 @@ function RunDetailsInner() {
 
       {tab === "evaluations" ? (
         <div className="card">
-          <p className="lede">Evaluation results for this run open in Evaluations / workbench.</p>
+          <p className="lede">Evaluation results for this run open in Evaluations.</p>
           <Link href="/evaluations">Evaluations</Link>
         </div>
       ) : null}
@@ -330,10 +330,10 @@ function RunDetailsInner() {
       {tab === "logs" ? (
         <div className="card">
           <p className="lede">
-            Tensorlane does not copy run stdout into the control plane. Use the workbench log viewer or your job runner.
+            Tensorlane does not copy run stdout into the control plane. Use the tracking UI log viewer or your job runner.
           </p>
           <Link className="btn secondary" href="/tracking">
-            Workbench
+            Tracking UI
           </Link>
         </div>
       ) : null}

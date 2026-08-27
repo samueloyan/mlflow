@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import { RegistryWebhooks } from "@/components/integrations/RegistryWebhooks";
 import { PageHeader } from "@/components/PageHeader";
 import { Drawer } from "@/components/ui/Modal";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -295,6 +296,7 @@ export default function IntegrationsPage() {
           })}
         </div>
       </section>
+      <RegistryWebhooks canManage={canManage} />
       {[...new Set(OTHER_INTEGRATIONS.map((item) => item.category))].map((category) => (
         <section key={category} style={{ marginBottom: 24 }}>
           <p className="kicker">{category}</p>

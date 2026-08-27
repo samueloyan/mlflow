@@ -94,7 +94,7 @@ export default function SettingsPage() {
       <PageHeader
         kicker="Organization"
         title="Settings"
-        lede="Workspaces map 1:1 onto MLflow workspaces. Artifact prefixes are org/<org_id>/workspace/<workspace_id>."
+        lede="Workspaces map 1:1 onto tracking workspaces. Artifact prefixes are org/<org_id>/workspace/<workspace_id>."
       />
       {message ? <div className="banner warn">{message}</div> : null}
       <div className="grid">
@@ -103,7 +103,7 @@ export default function SettingsPage() {
             <thead>
               <tr>
                 <th>Name</th>
-                <th>MLflow workspace</th>
+                <th>Tracking workspace</th>
                 <th>Artifact root</th>
               </tr>
             </thead>

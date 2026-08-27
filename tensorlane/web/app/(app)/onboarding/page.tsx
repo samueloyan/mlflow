@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { CodeBlock } from "@/components/ui/CodeBlock";
 import { api, type Organization } from "@/lib/api";
+import { pythonSdkSnippet } from "@/lib/brand";
 import { usePublicTrackingUri } from "@/lib/usePublicTrackingUri";
 
 export default function OnboardingPage() {
@@ -38,8 +39,8 @@ export default function OnboardingPage() {
       <p className="kicker">Start</p>
       <h1>Create your organization</h1>
       <p className="lede">
-        An organization is the billing and membership root. A workspace is the MLflow isolation
-        boundary your SDK traffic will bind to.
+        An organization is the billing and membership root. A workspace is the isolation
+        boundary your SDK traffic binds to.
       </p>
       {message ? <div className="banner danger">{message}</div> : null}
       <form className="card span-6" style={{ maxWidth: 480 }} onSubmit={(event) => void create(event)}>
@@ -56,17 +57,8 @@ export default function OnboardingPage() {
         </button>
       </form>
       <div className="card" style={{ maxWidth: 640, marginTop: 24 }}>
-        <p className="kicker">Install MLflow</p>
-        <CodeBlock
-          value={`import mlflow
-
-mlflow.set_tracking_uri("${tracking}")
-
-with mlflow.start_run():
-    mlflow.log_param("model", "gpt-4o")
-    mlflow.log_metric("score", 0.94)`}
-          label="Copy snippet"
-        />
+        <p className="kicker">Python SDK</p>
+        <CodeBlock value={pythonSdkSnippet(tracking)} label="Copy snippet" />
       </div>
     </div>
   );

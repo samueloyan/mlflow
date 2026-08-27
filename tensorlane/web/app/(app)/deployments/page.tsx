@@ -517,8 +517,8 @@ export default function DeploymentsPage() {
               title="No guardrails"
               body="Guardrails wrap a registered judge or scorer and run before or after an endpoint call. Create the scorer in the tracking UI, then attach it here."
               action={
-                <Link className="btn secondary" href="/tracking?hash=/gateway">
-                  Open tracking UI
+                <Link className="btn secondary" href="/evaluations">
+                  Open evaluations
                 </Link>
               }
             />

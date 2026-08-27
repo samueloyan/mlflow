@@ -9,8 +9,12 @@ export default function ReportsPage() {
       <div className="grid">
         {[
           { href: "/experiments", title: "Experiment performance", body: "Open the experiment list and compare runs." },
-          { href: "/models", title: "Model performance", body: "Registry stages and latest versions." },
-          { href: "/evaluations", title: "Evaluation results", body: "Scorers and datasets in this workspace." },
+          { href: "/models", title: "Model performance", body: "Registry stages, logged models, and latest versions." },
+          { href: "/evaluations", title: "Evaluation results", body: "Judges, scorers, and datasets in this workspace." },
+          { href: "/sessions", title: "Chat sessions", body: "Turns grouped by session id." },
+          { href: "/review", title: "Review queues", body: "Human review of traces." },
+          { href: "/playground", title: "Playground", body: "Invoke named endpoints." },
+          { href: "/mcp", title: "MCP registry", body: "Registered Model Context Protocol servers." },
           { href: "/usage", title: "Usage", body: "Meters for the current billing period." },
           { href: "/cost", title: "Cost", body: "Estimated spend from metered usage." },
           { href: "/monitoring", title: "AI application health", body: "Alerts and trace volume." },

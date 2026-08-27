@@ -67,6 +67,36 @@ const PATHS: Record<string, ReactNode> = {
       <circle cx="12" cy="7" r="2" />
     </>
   ),
+  sessions: (
+    <>
+      <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
+      <path d="M8 9h8" />
+      <path d="M8 13h5" />
+    </>
+  ),
+  review: (
+    <>
+      <rect x="4" y="3" width="16" height="18" rx="2" />
+      <path d="M8 8h8" />
+      <path d="M8 12h8" />
+      <path d="M8 16h4" />
+    </>
+  ),
+  playground: (
+    <>
+      <path d="M12 3v10" />
+      <path d="M8 9l4 4 4-4" />
+      <path d="M5 17h14" />
+      <path d="M7 21h10" />
+    </>
+  ),
+  mcp: (
+    <>
+      <rect x="3" y="7" width="7" height="10" rx="1" />
+      <rect x="14" y="7" width="7" height="10" rx="1" />
+      <path d="M10 12h4" />
+    </>
+  ),
   evaluations: (
     <>
       <path d="M9 11l3 3 8-8" />

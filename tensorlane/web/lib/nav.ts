@@ -27,10 +27,14 @@ export const NAV: NavGroup[] = [
       { href: "/runs", label: "Runs", icon: "runs", roles: BUILD_ROLES },
       { href: "/models", label: "Models", icon: "models", roles: BUILD_ROLES },
       { href: "/traces", label: "Traces", icon: "traces", roles: BUILD_ROLES },
+      { href: "/sessions", label: "Sessions", icon: "sessions", roles: BUILD_ROLES },
       { href: "/evaluations", label: "Evaluations", icon: "evaluations", roles: BUILD_ROLES },
+      { href: "/review", label: "Review", icon: "review", roles: BUILD_ROLES },
       { href: "/datasets", label: "Datasets", icon: "datasets", roles: BUILD_ROLES },
       { href: "/prompts", label: "Prompts", icon: "prompts", roles: BUILD_ROLES },
+      { href: "/playground", label: "Playground", icon: "playground", roles: BUILD_ROLES },
       { href: "/deployments", label: "Deployments", icon: "deployments", roles: BUILD_ROLES },
+      { href: "/mcp", label: "MCP", icon: "mcp", roles: BUILD_ROLES },
       {
         href: "/monitoring",
         label: "Monitoring",
@@ -57,7 +61,7 @@ export const NAV: NavGroup[] = [
 ];
 
 export const EXTRA_NAV: NavItem[] = [
-  { href: "/tracking", label: "Workbench", icon: "workbench", roles: BUILD_ROLES },
+  { href: "/tracking", label: "Tracking UI", icon: "workbench", roles: BUILD_ROLES },
   { href: "/billing", label: "Billing", icon: "billing", roles: BILLING_ONLY },
   { href: "/cost", label: "Cost", icon: "cost", roles: BILLING_ROLES },
   { href: "/security", label: "Security", icon: "security", roles: ADMIN_ROLES },
