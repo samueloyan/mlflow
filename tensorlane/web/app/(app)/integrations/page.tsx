@@ -107,7 +107,11 @@ export default function IntegrationsPage() {
     setSecretName(`${selected.id}-${me.email.split("@")[0] || "prod"}`);
     setFields({});
     void getProviderConfig(ctx, selected.id).then((result) => {
-      const modes = result.ok ? result.data.auth_modes ?? [] : [];
+      if (!result.ok) {
+        setAuthMode(fallbackAuthMode());
+        return;
+      }
+      const modes = result.data.auth_modes ?? [];
       const preferred =
         modes.find((mode) => mode.mode === result.data.default_mode) ?? modes[0] ?? fallbackAuthMode();
       setAuthMode(preferred);

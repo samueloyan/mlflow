@@ -44,7 +44,7 @@ export default function DeploymentsPage() {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("support-chat");
   const [secretId, setSecretId] = useState("");
-  const [modelName, setModelName] = useState(DEFAULT_MODELS.openai);
+  const [modelName, setModelName] = useState("gpt-4o-mini");
   const [saving, setSaving] = useState(false);
   const [trying, setTrying] = useState<GatewayEndpoint | null>(null);
   const [prompt, setPrompt] = useState("Say hello in one sentence.");
@@ -98,11 +98,12 @@ export default function DeploymentsPage() {
       return;
     }
     setSaving(true);
+    const model = modelName.trim();
     const definition = await createGatewayModelDefinition(ctx, {
-      name: `${endpointName}-${modelName}`.replace(/[^A-Za-z0-9._-]+/g, "-").slice(0, 80),
+      name: `${endpointName}-${model}`.replace(/[^A-Za-z0-9._-]+/g, "-").slice(0, 80),
       secret_id: selectedSecret.secret_id,
       provider: selectedSecret.provider,
-      model_name: modelName.trim(),
+      model_name: model,
       created_by: me.email,
     });
     if (!definition.ok || !definition.data.model_definition?.model_definition_id) {
