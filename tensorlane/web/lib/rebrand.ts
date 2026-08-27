@@ -11,18 +11,15 @@ const PHRASE_REPLACEMENTS: readonly [string, string][] = [
 
 const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "IFRAME"]);
 const ATTRS = ["title", "aria-label", "alt", "placeholder", "aria-description"] as const;
-const LOGO_SELECTOR = 'svg[viewBox="0 0 109 40"],svg[width="109"][height="40"]';
 
 export const REBRAND_CSS = `
-svg[viewBox="0 0 109 40"],svg[width="109"][height="40"]{display:none!important}
-a:has(svg[viewBox="0 0 109 40"])::after,a:has(svg[width="109"][height="40"])::after{
-  content:"tensorlane";display:block;font:500 17px/24px Georgia,Times New Roman,serif;
-  letter-spacing:.04em;color:inherit
+svg[viewBox="0 0 109 40"],svg[viewbox="0 0 109 40"],svg[width="109"][height="40"]{
+  display:none!important;visibility:hidden!important;width:0!important;height:0!important
 }
 .tensorlane-wordmark{display:block;font:500 17px/24px Georgia,Times New Roman,serif;
   letter-spacing:.04em;color:inherit}
-a[href*="mlflow.org" i]{display:none!important}
-img[src*="mlflow.org" i],img[src*="MLflow-logo" i]{display:none!important}
+a[href*="mlflow.org"]{display:none!important}
+img[src*="mlflow.org"],img[src*="MLflow-logo"]{display:none!important}
 `.trim();
 
 export function rebrandVisibleText(value: string): string {
@@ -42,15 +39,33 @@ function vendorUrl(value: string | null): boolean {
 }
 
 function createIn(root: ParentNode, tag: string): HTMLElement {
-  const doc = root instanceof Document ? root : (root.ownerDocument ?? document);
-  return doc.createElement(tag);
+  const owner = root instanceof Document ? root : (root.ownerDocument ?? document);
+  return owner.createElement(tag);
+}
+
+function isLogo(svg: Element): boolean {
+  const vb = (svg.getAttribute("viewBox") || svg.getAttribute("viewbox") || "").replace(/,/g, " ");
+  if (vb.includes("109") && vb.includes("40")) return true;
+  if (svg.getAttribute("width") === "109" && svg.getAttribute("height") === "40") return true;
+  return (svg.innerHTML || "").includes("31.0316");
+}
+
+function hideEl(el: HTMLElement): void {
+  el.style.setProperty("display", "none", "important");
+  el.style.setProperty("visibility", "hidden", "important");
+  el.style.setProperty("width", "0", "important");
+  el.style.setProperty("height", "0", "important");
+  el.setAttribute("hidden", "");
+  el.setAttribute("aria-hidden", "true");
 }
 
 function maskLogos(root: ParentNode): void {
-  const svgs = root.querySelectorAll(LOGO_SELECTOR);
-  svgs.forEach((svg) => {
+  root.querySelectorAll("svg").forEach((svg) => {
+    if (!isLogo(svg)) return;
+    hideEl(svg as HTMLElement);
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
     const parent = svg.parentElement;
-    if (!parent || parent.tagName === "A") return;
+    if (!parent) return;
     if (parent.querySelector(".tensorlane-wordmark")) return;
     const mark = createIn(root, "span");
     mark.className = "tensorlane-wordmark";
@@ -63,8 +78,7 @@ function hideVendorMedia(root: ParentNode): void {
   root.querySelectorAll("a[href],img[src]").forEach((el) => {
     const url = el.getAttribute("href") || el.getAttribute("src") || "";
     if (!vendorUrl(url)) return;
-    el.setAttribute("hidden", "");
-    el.setAttribute("aria-hidden", "true");
+    hideEl(el as HTMLElement);
     if (el.hasAttribute("href")) el.removeAttribute("href");
   });
 }
@@ -100,10 +114,18 @@ function ensureChromeStyles(doc: Document): void {
   (doc.head ?? doc.documentElement).appendChild(style);
 }
 
+function paint(doc: Document): void {
+  if (doc.title) doc.title = rebrandVisibleText(doc.title);
+  if (doc.body) walk(doc.body);
+  maskLogos(doc);
+  hideVendorMedia(doc);
+}
+
 export function injectTrackingRebrand(doc: Document): () => void {
   const marked = doc.documentElement;
   if (marked?.getAttribute("data-tensorlane-rebrand") === "1") {
     ensureChromeStyles(doc);
+    paint(doc);
     return () => undefined;
   }
   marked?.setAttribute("data-tensorlane-rebrand", "1");
@@ -112,19 +134,17 @@ export function injectTrackingRebrand(doc: Document): () => void {
   let scheduled = false;
   const run = () => {
     scheduled = false;
-    if (doc.title) doc.title = rebrandVisibleText(doc.title);
-    if (doc.body) walk(doc.body);
-    maskLogos(doc);
-    hideVendorMedia(doc);
+    paint(doc);
   };
   const schedule = () => {
+    paint(doc);
     if (scheduled) return;
     scheduled = true;
     const raf = doc.defaultView?.requestAnimationFrame ?? requestAnimationFrame;
     raf.call(doc.defaultView ?? window, run);
   };
 
-  run();
+  paint(doc);
   const observer = new MutationObserver(schedule);
   observer.observe(doc.documentElement, {
     childList: true,

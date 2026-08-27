@@ -20,15 +20,13 @@ _TITLE_RE = re.compile(r"(<title\b[^>]*>)(.*?)(</title>)", re.IGNORECASE | re.DO
 # Hide the protocol wordmark SVG (letterforms, not text) and vendor docs links.
 # Do not include the substring "</style>".
 REBRAND_CSS = """
-svg[viewBox="0 0 109 40"],svg[width="109"][height="40"]{display:none!important}
-a:has(svg[viewBox="0 0 109 40"])::after,a:has(svg[width="109"][height="40"])::after{
-  content:"tensorlane";display:block;font:500 17px/24px Georgia,Times New Roman,serif;
-  letter-spacing:.04em;color:inherit
+svg[viewBox="0 0 109 40"],svg[viewbox="0 0 109 40"],svg[width="109"][height="40"]{
+  display:none!important;visibility:hidden!important;width:0!important;height:0!important
 }
 .tensorlane-wordmark{display:block;font:500 17px/24px Georgia,Times New Roman,serif;
   letter-spacing:.04em;color:inherit}
-a[href*="mlflow.org" i]{display:none!important}
-img[src*="mlflow.org" i],img[src*="MLflow-logo" i]{display:none!important}
+a[href*="mlflow.org"]{display:none!important}
+img[src*="mlflow.org"],img[src*="MLflow-logo"]{display:none!important}
 """.strip()
 
 # Runs in the tracking workbench. Do not include the substring "</script>".
@@ -58,13 +56,31 @@ REBRAND_JS = r"""
   function vendorUrl(v){
     return /mlflow\.org/i.test(v || "");
   }
+  function isLogo(svg){
+    var vb = String(svg.getAttribute("viewBox") || svg.getAttribute("viewbox") || "").replace(/,/g," ");
+    if (vb.indexOf("109") >= 0 && vb.indexOf("40") >= 0) return true;
+    if (svg.getAttribute("width") === "109" && svg.getAttribute("height") === "40") return true;
+    var inner = svg.innerHTML || "";
+    return inner.indexOf("31.0316") >= 0;
+  }
+  function hideEl(el){
+    el.style.setProperty("display","none","important");
+    el.style.setProperty("visibility","hidden","important");
+    el.style.setProperty("width","0","important");
+    el.style.setProperty("height","0","important");
+    el.setAttribute("hidden","");
+    el.setAttribute("aria-hidden","true");
+  }
   function chrome(root){
     if (!root || !root.querySelectorAll) return;
-    var svgs = root.querySelectorAll('svg[viewBox="0 0 109 40"],svg[width="109"][height="40"]');
+    var svgs = root.querySelectorAll("svg");
     for (var i = 0; i < svgs.length; i++){
       var svg = svgs[i];
+      if (!isLogo(svg)) continue;
+      hideEl(svg);
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
       var parent = svg.parentNode;
-      if (!parent || parent.nodeName === "A") continue;
+      if (!parent) continue;
       if (parent.querySelector && parent.querySelector(".tensorlane-wordmark")) continue;
       var mark = document.createElement("span");
       mark.className = "tensorlane-wordmark";
@@ -76,8 +92,7 @@ REBRAND_JS = r"""
       var el = media[j];
       var url = el.getAttribute("href") || el.getAttribute("src") || "";
       if (!vendorUrl(url)) continue;
-      el.setAttribute("hidden", "");
-      el.setAttribute("aria-hidden", "true");
+      hideEl(el);
       if (el.hasAttribute("href")) el.removeAttribute("href");
     }
   }
@@ -108,6 +123,7 @@ REBRAND_JS = r"""
     chrome(document);
   }
   function schedule(){
+    chrome(document);
     if (scheduled) return;
     scheduled = true;
     requestAnimationFrame(run);
