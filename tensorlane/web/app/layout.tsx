@@ -19,7 +19,7 @@ const mono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: "Tensorlane",
-  description: "AI engineering platform. MLflow compatible.",
+  description: "AI engineering platform.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

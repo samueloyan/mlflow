@@ -30,6 +30,9 @@ dev = [
 postgres = [
   "psycopg[binary]>=3.2.0",
 ]
+tracking = [
+  "mlflow>=3.0",
+]
 
 [project.scripts]
 tensorlane = "tensorlane.cli:main"

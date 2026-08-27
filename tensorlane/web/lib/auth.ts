@@ -60,6 +60,10 @@ export const auth = betterAuth({
     "http://localhost:8080",
     process.env.BETTER_AUTH_URL,
     process.env.NEXT_PUBLIC_APP_URL,
+    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined,
+    process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : undefined,
   ].filter((value): value is string => Boolean(value)),
   emailAndPassword: {
     enabled: true,

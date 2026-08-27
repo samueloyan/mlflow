@@ -46,6 +46,7 @@ from tensorlane.ids import (
     to_mlflow_workspace_name,
 )
 from tensorlane.mlflow_admin import MlflowAdmin
+from tensorlane.seed import mlflow_proxied_artifact_root, workspace_artifact_root
 from tensorlane.services import (
     api_key_role,
     assert_seat_available,
@@ -337,7 +338,7 @@ def create_workspace(
     )
     workspace_id = new_id(WORKSPACE_PREFIX)
     mlflow_name = to_mlflow_workspace_name(workspace_id)
-    artifact_root = f"{settings.artifact_root.rstrip('/')}/org/{org.id}/workspace/{workspace_id}"
+    artifact_root = workspace_artifact_root(settings.artifact_root, org.id, workspace_id)
     slug = _slugify(body.name)
     existing = session.scalar(
         select(Workspace).where(Workspace.organization_id == org.id, Workspace.slug == slug)
@@ -354,7 +355,9 @@ def create_workspace(
     )
     session.add(workspace)
     session.flush()
-    mlflow.create_workspace(mlflow_name, artifact_root, body.name)
+    mlflow.create_workspace(
+        mlflow_name, mlflow_proxied_artifact_root(org.id, workspace_id), body.name
+    )
     _audit(
         session,
         request,

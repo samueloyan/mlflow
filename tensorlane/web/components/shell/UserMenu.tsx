@@ -19,7 +19,7 @@ export function UserMenu({ onClose }: { onClose: () => void }) {
         </span>
       </div>
       <Link className="dropdown-item" href="/tracking" onClick={onClose}>
-        Workbench
+        Tracking UI
       </Link>
       <Link className="dropdown-item" href="/settings" onClick={onClose}>
         Settings

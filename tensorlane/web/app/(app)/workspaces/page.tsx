@@ -54,7 +54,7 @@ export default function WorkspacesPage() {
           >
             <h2>{workspace.name}</h2>
             <p className="lede" style={{ marginBottom: 0 }}>
-              Slug {workspace.slug} · MLflow {workspace.mlflow_workspace_name}
+              Slug {workspace.slug} · Tracking {workspace.mlflow_workspace_name}
             </p>
           </button>
         ))}

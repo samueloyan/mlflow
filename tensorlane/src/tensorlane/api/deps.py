@@ -47,7 +47,9 @@ def mlflow_admin_dep(settings: Settings = Depends(settings_dep)) -> MlflowAdmin:
     # Tests override this dependency.
     if settings.mlflow_internal_uri.startswith("null://"):
         return NullMlflowAdmin()
-    return HttpMlflowAdmin(settings.mlflow_internal_uri)
+    return HttpMlflowAdmin(
+        settings.mlflow_internal_uri, static_prefix=settings.mlflow_static_prefix
+    )
 
 
 def _bearer_token(authorization: str | None) -> str | None:

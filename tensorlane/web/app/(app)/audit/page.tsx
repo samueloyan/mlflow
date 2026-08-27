@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 
 import { EmptyState, PageHeader } from "@/components/PageHeader";
-import { api, type AuditEvent } from "@/lib/api";
+import { ErrorState } from "@/components/ui/EmptyState";
+import { ApiError, api, type AuditEvent } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { useShell } from "@/lib/shell";
 
@@ -11,12 +12,25 @@ export default function AuditPage() {
   const { organization } = useShell();
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [forbidden, setForbidden] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  function load() {
     if (!organization) return;
+    setForbidden(false);
+    setError(null);
     void api<AuditEvent[]>(`/api/v1/audit-events?organization_id=${organization.id}`)
       .then(setEvents)
-      .catch(() => setForbidden(true));
+      .catch((err: unknown) => {
+        if (err instanceof ApiError && err.status === 403) {
+          setForbidden(true);
+          return;
+        }
+        setError(err instanceof Error ? err.message : "Could not load audit events.");
+      });
+  }
+
+  useEffect(() => {
+    load();
   }, [organization]);
 
   return (
@@ -35,6 +49,8 @@ export default function AuditPage() {
       <div className="card span-12">
         {forbidden ? (
           <p className="lede">Owners and admins can read the audit log.</p>
+        ) : error ? (
+          <ErrorState title="Unable to load audit log" body={error} onRetry={load} />
         ) : events.length === 0 ? (
           <EmptyState title="No events yet" body="Membership, key, billing, and security changes appear here." />
         ) : (

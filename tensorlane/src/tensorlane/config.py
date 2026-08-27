@@ -11,10 +11,12 @@ class Settings(BaseSettings):
     tensorlane_secret_key: str = "dev-only-secret"
     public_url: str = "http://localhost:8080"
     mlflow_internal_uri: str = "http://127.0.0.1:5000"
+    mlflow_static_prefix: str = "/mlflow"
     web_internal_uri: str = ""
     artifact_root: str = "file:///tmp/tensorlane-artifacts"
     redis_url: str | None = None
     web_origin: str = "http://localhost:3000"
+    cors_origins: str = ""
     environment: str = "development"
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
@@ -33,6 +35,20 @@ class Settings(BaseSettings):
     @property
     def stripe_configured(self) -> bool:
         return bool(self.stripe_secret_key)
+
+    def cors_allow_origins(self) -> list[str]:
+        """Dashboard origins allowed to call the gateway with cookies.
+
+        ``WEB_ORIGIN``, ``PUBLIC_URL``, and ``CORS_ORIGINS`` each accept a
+        comma-separated list so Vercel production and preview URLs can coexist.
+        """
+        seen: list[str] = []
+        for raw in (self.web_origin, self.public_url, self.cors_origins):
+            for part in raw.split(","):
+                origin = part.strip().rstrip("/")
+                if origin and origin not in seen:
+                    seen.append(origin)
+        return seen or ["http://localhost:3000"]
 
 
 def get_settings() -> Settings:

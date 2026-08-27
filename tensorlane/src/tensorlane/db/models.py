@@ -351,6 +351,7 @@ class AlertRule(Base):
     threshold: Mapped[float] = mapped_column(Float, nullable=False)
     window_hours: Mapped[int] = mapped_column(nullable=False, default=24)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    delivery_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     created_at: Mapped[datetime] = mapped_column(IsoDateTime(), server_default=func.now())
 
 

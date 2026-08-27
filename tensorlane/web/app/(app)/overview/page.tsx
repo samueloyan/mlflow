@@ -18,11 +18,13 @@ import { Icon } from "@/components/ui/Icons";
 import { api, type Approval, type Usage } from "@/lib/api";
 import { formatCount, formatDurationBetween, formatEpoch, greeting, periodDelta } from "@/lib/format";
 import { canWrite } from "@/lib/permissions";
+import { usePublicTrackingUri } from "@/lib/usePublicTrackingUri";
 import { useShell } from "@/lib/shell";
 import { useTrackingContext } from "@/lib/useTrackingContext";
 import {
   bucketByDay,
   metricMap,
+  MODEL_REGISTRY_FILTER,
   runId,
   runName,
   runStatusLabel,
@@ -50,7 +52,7 @@ export default function OverviewPage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [reload, setReload] = useState(0);
-  const tracking = process.env.NEXT_PUBLIC_TRACKING_URI || "https://api.tensorlane.ai";
+  const tracking = usePublicTrackingUri();
   const firstName = (me.name || me.email || "there").split(/\s+/)[0];
 
   useEffect(() => {
@@ -85,7 +87,7 @@ export default function OverviewPage() {
       const [runResult, traceResult, modelResult] = await Promise.all([
         searchRuns(trackingCtx, ids, { maxResults: 200 }),
         searchTraces(trackingCtx, ids, { maxResults: 100 }),
-        searchRegisteredModels(trackingCtx),
+        searchRegisteredModels(trackingCtx, { filter: MODEL_REGISTRY_FILTER }),
       ]);
       if (cancelled) return;
       if (!runResult.ok) {
@@ -143,7 +145,13 @@ export default function OverviewPage() {
     return (
       <div className="page">
         <h1>Overview</h1>
-        <p className="lede">Create an organization to begin.</p>
+        <p className="lede">
+          You&apos;re signed in. Create an organization once the Tensorlane gateway is connected —
+          tracking, membership, and billing APIs live there.
+        </p>
+        <p>
+          <Link href="/onboarding">Create organization</Link>
+        </p>
       </div>
     );
   }
@@ -264,7 +272,7 @@ export default function OverviewPage() {
             {loading ? (
               <TableSkeleton rows={5} cols={6} />
             ) : recentRuns.length === 0 ? (
-              <p className="lede">No runs in this workspace yet. Log one with the MLflow SDK.</p>
+              <p className="lede">No runs in this workspace yet. Log one with the Python SDK.</p>
             ) : (
               <table className="data">
                 <thead>
@@ -407,6 +415,10 @@ export default function OverviewPage() {
               <Link className="quick-action" href="/evaluations">
                 <Icon name="evaluations" />
                 New Evaluation
+              </Link>
+              <Link className="quick-action" href="/playground">
+                <Icon name="playground" />
+                Open Playground
               </Link>
               <Link className="quick-action" href="/traces">
                 <Icon name="traces" />

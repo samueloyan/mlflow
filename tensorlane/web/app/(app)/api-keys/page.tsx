@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 
-import { PageHeader } from "@/components/PageHeader";
+import { EmptyState, PageHeader } from "@/components/PageHeader";
 import { CodeBlock } from "@/components/ui/CodeBlock";
+import { ErrorState } from "@/components/ui/EmptyState";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { api, type ApiKey, type CreatedApiKey } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { canManageKeys } from "@/lib/permissions";
+import { usePublicTrackingUri } from "@/lib/usePublicTrackingUri";
 import { useShell } from "@/lib/shell";
 import { Modal } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
@@ -20,13 +22,23 @@ export default function ApiKeysPage() {
   const [workspaceId, setWorkspaceId] = useState<string>("");
   const [secret, setSecret] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-  const tracking = process.env.NEXT_PUBLIC_TRACKING_URI || "https://api.tensorlane.ai";
+  const tracking = usePublicTrackingUri();
   const canCreate = canManageKeys(role);
 
   async function refresh() {
     if (!organization) return;
-    setKeys(await api<ApiKey[]>(`/api/v1/api-keys?organization_id=${organization.id}`));
+    setLoading(true);
+    try {
+      setKeys(await api<ApiKey[]>(`/api/v1/api-keys?organization_id=${organization.id}`));
+      setLoadError(null);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Could not load API keys.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -85,13 +97,23 @@ export default function ApiKeysPage() {
           Copy this key now. It cannot be recovered.
           <CodeBlock value={secret} label="Copy secret" />
           <p className="lede">
-            {`export MLFLOW_TRACKING_URI=${tracking}`}
+            {`export TENSORLANE_TRACKING_URI=${tracking}`}
             <br />
-            {`export MLFLOW_TRACKING_TOKEN=tl_live_xxxxx`}
+            {`export TENSORLANE_API_KEY=tl_live_xxxxx`}
           </p>
         </div>
       ) : null}
       {message ? <div className="banner danger">{message}</div> : null}
+      {loadError ? (
+        <ErrorState title="Unable to load API keys" body={loadError} onRetry={() => void refresh()} />
+      ) : loading ? (
+        <p className="lede">Loading API keys…</p>
+      ) : keys.length === 0 ? (
+        <EmptyState
+          title="No API keys yet"
+          body="Create a workspace-scoped key for the SDK. Secrets are shown once."
+        />
+      ) : (
       <div className="card">
         <table className="data">
           <thead>
@@ -128,6 +150,7 @@ export default function ApiKeysPage() {
           </tbody>
         </table>
       </div>
+      )}
       {creating ? (
         <Modal
           title="Create API key"

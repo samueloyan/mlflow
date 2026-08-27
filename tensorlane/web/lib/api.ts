@@ -120,6 +120,7 @@ export type AlertRule = {
   window_hours: number;
   enabled: boolean;
   workspace_id: string | null;
+  delivery_url: string | null;
 };
 
 export type AlertEvent = {
@@ -164,25 +165,43 @@ export class ApiError extends Error {
 }
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
-    ...init,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      ...init,
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {}),
+      },
+      signal: init?.signal ?? AbortSignal.timeout(30_000),
+    });
+  } catch {
+    throw new ApiError(0, "The control plane did not respond.", "TIMEOUT");
+  }
   if (response.status === 204) {
     return undefined as T;
   }
-  const payload = (await response.json()) as T & ErrorBody;
+  const text = await response.text();
+  let payload: (T & ErrorBody) | undefined;
+  if (text) {
+    try {
+      payload = JSON.parse(text) as T & ErrorBody;
+    } catch {
+      throw new ApiError(
+        response.status,
+        response.ok ? "Unexpected non-JSON response." : `Request failed (${response.status}).`,
+        "NON_JSON",
+      );
+    }
+  }
   if (!response.ok) {
     throw new ApiError(
       response.status,
-      payload.error?.message ?? "Request failed.",
-      payload.error?.code ?? "ERROR",
-      payload.error?.request_id,
+      payload?.error?.message ?? `Request failed (${response.status}).`,
+      payload?.error?.code ?? "ERROR",
+      payload?.error?.request_id,
     );
   }
-  return payload;
+  return payload as T;
 }

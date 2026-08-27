@@ -107,6 +107,11 @@ export function greeting(now = new Date()): string {
   return "Good evening";
 }
 
+export function displayArtifactUri(value: string | null | undefined): string {
+  if (!value) return "—";
+  return value.replace(/^mlflow-artifacts:\/+/i, "artifacts:/");
+}
+
 export async function copyText(value: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(value);

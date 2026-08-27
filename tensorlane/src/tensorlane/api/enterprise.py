@@ -8,7 +8,8 @@ from datetime import timedelta
 from typing import Any
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, Header, Request, Response
+from fastapi import APIRouter, Depends, Header, Query, Request, Response
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -68,8 +69,9 @@ from tensorlane.ids import (
 )
 from tensorlane.jobs import enqueue
 from tensorlane.mail import OutboundEmail, get_mailer
+from tensorlane.notify import assert_delivery_url
 from tensorlane.services import assert_seat_available, count_owners, get_organization
-from tensorlane.storage import assert_artifact_prefix, proxy_url
+from tensorlane.storage import assert_artifact_prefix, presign_s3, proxy_url, resolve_local_file
 from tensorlane.urls import safe_return_url
 
 router = APIRouter(prefix="/api/v1")
@@ -141,6 +143,7 @@ class AlertIn(BaseModel):
     threshold: float
     window_hours: int = Field(default=24, ge=1, le=24 * 90)
     workspace_id: str | None = None
+    delivery_url: str | None = Field(default=None, max_length=1024)
 
 
 class SavedViewIn(BaseModel):
@@ -1172,6 +1175,7 @@ def list_alerts(
                 "window_hours": row.window_hours,
                 "enabled": row.enabled,
                 "workspace_id": row.workspace_id,
+                "delivery_url": row.delivery_url,
             }
             for row in rules
         ],
@@ -1201,6 +1205,9 @@ def create_alert(
     EntitlementService(org.plan).require_feature("quality_monitoring")
     if body.operator not in {"gte", "lte"}:
         raise ConflictError("operator must be gte or lte.")
+    delivery_url = None
+    if body.delivery_url:
+        delivery_url = assert_delivery_url(body.delivery_url)
     row = AlertRule(
         id=new_id(ALERT_PREFIX),
         organization_id=org.id,
@@ -1210,6 +1217,7 @@ def create_alert(
         operator=body.operator,
         threshold=body.threshold,
         window_hours=body.window_hours,
+        delivery_url=delivery_url,
     )
     session.add(row)
     enqueue(session, kind="alerts.evaluate", payload={}, organization_id=org.id)
@@ -1225,6 +1233,40 @@ def create_alert(
     )
     session.flush()
     return {"id": row.id}
+
+
+@router.get("/artifacts/download")
+def download_artifact(
+    organization_id: str = Query(...),
+    workspace_id: str = Query(...),
+    key: str = Query(...),
+    principal: Principal = Depends(get_principal),
+    session: Session = Depends(get_session),
+) -> Response:
+    org = _org(session, organization_id)
+    require_action(session, principal, org.id, "mlflow.read")
+    workspace = session.get(Workspace, workspace_id)
+    if workspace is None or workspace.organization_id != org.id or workspace.deleted_at is not None:
+        raise NotFoundError("Workspace not found.")
+    role = role_for(session, principal, org.id)
+    if not workspace_visible(
+        session,
+        organization_id=org.id,
+        workspace_id=workspace.id,
+        user_id=principal.user_id,
+        workspace_acl=org.workspace_acl,
+        role=role,
+    ):
+        raise NotFoundError("Workspace not found.")
+    assert_artifact_prefix(org.id, workspace.id, key)
+    root = workspace.artifact_root
+    if root.startswith("s3://"):
+        signed = presign_s3(root, key)
+        if not signed:
+            raise NotFoundError("Artifact not found.")
+        return RedirectResponse(signed, status_code=302)
+    path = resolve_local_file(root, org.id, workspace.id, key)
+    return FileResponse(path, filename=path.name)
 
 
 @router.delete("/organizations/{organization_id}/alerts/{alert_id}", status_code=204)

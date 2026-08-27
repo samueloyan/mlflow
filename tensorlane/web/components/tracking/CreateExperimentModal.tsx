@@ -58,7 +58,7 @@ export function CreateExperimentModal({
       <form id="create-experiment" onSubmit={(event) => void submit(event)}>
         <FormField
           label="Name"
-          description="A workspace-unique name. The MLflow SDK can still create experiments with set_experiment."
+          description="A workspace-unique name. The SDK can still create experiments with set_experiment."
           error={error ?? undefined}
         >
           <input value={name} onChange={(event) => setName(event.target.value)} required autoFocus />

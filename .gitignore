@@ -159,6 +159,7 @@ tensorlane/web/*.tsbuildinfo
 tensorlane/*.db
 tensorlane.db
 tensorlane-dev.db
+.tensorlane-mlflow/
 deploy/compose/.env
 
 # Next.js helpers live in tensorlane/web/lib (MLflow ignores generic lib/)

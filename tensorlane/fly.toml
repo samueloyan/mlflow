@@ -1,0 +1,50 @@
+# Tensorlane gateway + private MLflow. Dashboard stays on Vercel (tensorla).
+# Deploy from this directory: fly deploy
+# Do not put DATABASE_URL / pepper / secret in this file.
+
+app = "tensorla-gateway"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile.runtime"
+
+[env]
+  PORT = "8080"
+  WEB_ORIGIN = "https://tensorla.vercel.app"
+  PUBLIC_URL = "https://tensorla.vercel.app"
+  ENVIRONMENT = "production"
+  MLFLOW_INTERNAL_URI = "http://127.0.0.1:5000"
+  MLFLOW_STATIC_PREFIX = "/mlflow"
+  ARTIFACT_ROOT = "file:///var/mlflow/artifacts"
+  TENSORLANE_DATA_DIR = "/var/mlflow"
+  CONTROL_PLANE_RPM = "120"
+  MLFLOW_WRITE_RPM = "600"
+  TRACE_INGEST_RPM = "1200"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 40
+    hard_limit = 80
+
+[[http_service.checks]]
+  grace_period = "60s"
+  interval = "15s"
+  timeout = "10s"
+  method = "GET"
+  path = "/health"
+
+[mounts]
+  source = "mlflow_data"
+  destination = "/var/mlflow"
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "2gb"

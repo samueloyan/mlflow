@@ -7,6 +7,7 @@ import { formatDate } from "@/lib/format";
 import { useShell } from "@/lib/shell";
 import { CopyButton } from "@/components/CopyButton";
 import { PageHeader } from "@/components/PageHeader";
+import { ErrorState } from "@/components/ui/EmptyState";
 
 const ROLES = ["owner", "admin", "developer", "viewer", "billing"] as const;
 
@@ -17,14 +18,24 @@ export default function MembersPage() {
   const [email, setEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("developer");
   const [message, setMessage] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const myRole = role ?? me.organizations.find((row) => row.id === organization?.id)?.role;
   const canManage = myRole === "owner" || myRole === "admin";
 
   async function refresh() {
     if (!organization) return;
-    setMembers(await api<Member[]>(`/api/v1/organizations/${organization.id}/members`));
-    setInvites(await api<Invitation[]>(`/api/v1/organizations/${organization.id}/invitations`));
+    try {
+      setMembers(await api<Member[]>(`/api/v1/organizations/${organization.id}/members`));
+      try {
+        setInvites(await api<Invitation[]>(`/api/v1/organizations/${organization.id}/invitations`));
+      } catch {
+        setInvites([]);
+      }
+      setLoadError(null);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Could not load members.");
+    }
   }
 
   useEffect(() => {
@@ -114,6 +125,9 @@ export default function MembersPage() {
         <p className="lede">
           {members.length} of {organization.limits.members} seats on the {organization.plan} plan.
         </p>
+      ) : null}
+      {loadError ? (
+        <ErrorState title="Unable to load members" body={loadError} onRetry={() => void refresh()} />
       ) : null}
       {message ? <div className="banner danger">{message}</div> : null}
       {inviteUrl ? (

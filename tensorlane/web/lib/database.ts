@@ -15,8 +15,12 @@ function sqliteFileFromUrl(databaseUrl: string): string {
 }
 
 export function createAuthDatabase(): pg.Pool | InstanceType<typeof import("better-sqlite3")> {
-  const url = process.env.DATABASE_URL || "sqlite:///./tensorlane-dev.db";
+  const url =
+    process.env.DATABASE_URL ||
+    (process.env.VERCEL ? "postgresql://127.0.0.1/tensorlane" : "sqlite:///./tensorlane-dev.db");
   if (url.startsWith("postgres")) {
+    // Pool construction does not open a connection, so Next.js can compile on Vercel
+    // before DATABASE_URL is set. Auth routes still need a reachable Postgres at runtime.
     return new pg.Pool({ connectionString: url });
   }
   try {

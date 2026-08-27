@@ -59,7 +59,7 @@ export default function InvitePage() {
           <p className="kicker">Invitation</p>
           <h1>You were asked to join a Tensorlane organization.</h1>
         </div>
-        <p className="lede">MLflow compatible. Organizations stay on the Tensorlane control plane.</p>
+        <p className="lede">The Python SDK already speaks this host. Organizations stay on the Tensorlane control plane.</p>
       </div>
       <div className="auth-form">
         <div className="auth-card">

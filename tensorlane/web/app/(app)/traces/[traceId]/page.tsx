@@ -14,6 +14,8 @@ import {
   getTrace,
   getTraceArtifact,
   parseDurationMs,
+  searchExperiments,
+  searchTraces,
   spanDurationMs,
   spanIO,
   spanType,
@@ -41,20 +43,36 @@ function TraceDetailsInner() {
     async function load() {
       const result = await getTrace(tracking, traceId);
       if (cancelled) return;
-      if (result.ok && result.data.trace) {
-        setInfo(result.data.trace.trace_info ?? { trace_id: traceId });
-        setSpans(result.data.trace.spans ?? []);
-        if ((result.data.trace.spans ?? []).length === 0) {
-          const artifact = await getTraceArtifact(tracking, traceId);
-          if (artifact.ok) setSpans(artifact.data.spans ?? []);
-        }
-        return;
+      let nextInfo: TraceInfo | null = result.ok ? (result.data.trace?.trace_info ?? null) : null;
+      let nextSpans: TraceSpan[] = result.ok ? (result.data.trace?.spans ?? []) : [];
+      if (nextSpans.length === 0) {
+        const artifact = await getTraceArtifact(tracking, traceId);
+        if (cancelled) return;
+        if (artifact.ok) nextSpans = artifact.data.spans ?? [];
       }
-      const artifact = await getTraceArtifact(tracking, traceId);
-      if (cancelled) return;
-      if (artifact.ok && (artifact.data.spans ?? []).length) {
-        setInfo({ trace_id: traceId });
-        setSpans(artifact.data.spans ?? []);
+      if (!nextInfo) {
+        const experiments = await searchExperiments(tracking);
+        if (cancelled) return;
+        if (experiments.ok) {
+          const ids = (experiments.data.experiments ?? [])
+            .map((row) => row.experiment_id)
+            .filter((id): id is string => Boolean(id));
+          const listed = await searchTraces(tracking, ids, {
+            filter: `attributes.request_id = '${traceId}'`,
+            maxResults: 5,
+          });
+          if (cancelled) return;
+          if (listed.ok) {
+            nextInfo =
+              (listed.data.traces ?? []).find((row) => row.trace_id === traceId) ??
+              listed.data.traces?.[0] ??
+              null;
+          }
+        }
+      }
+      if (nextInfo || nextSpans.length) {
+        setInfo(nextInfo ?? { trace_id: traceId });
+        setSpans(nextSpans);
         return;
       }
       setError(result.ok ? "Trace not found." : result.message);

@@ -71,7 +71,7 @@ def create_org_with_owner(
     )
     workspace_id = new_id(WORKSPACE_PREFIX)
     mlflow_name = to_mlflow_workspace_name(workspace_id)
-    root = f"{artifact_root.rstrip('/')}/org/{org.id}/workspace/{workspace_id}"
+    root = workspace_artifact_root(artifact_root, org.id, workspace_id)
     workspace = Workspace(
         id=workspace_id,
         organization_id=org.id,
@@ -83,8 +83,58 @@ def create_org_with_owner(
     session.add(workspace)
     session.flush()
     admin = mlflow or NullMlflowAdmin()
-    admin.create_workspace(mlflow_name, root, workspace_name)
+    admin.create_workspace(
+        mlflow_name, mlflow_proxied_artifact_root(org.id, workspace_id), workspace_name
+    )
     return org, workspace
+
+
+def workspace_artifact_root(artifact_root: str, organization_id: str, workspace_id: str) -> str:
+    """On-disk prefix after MLflow workspace-scopes proxied artifact uploads.
+
+    The SDK sees ``mlflow-artifacts:/org/.../workspace/...``. The tracking
+    server stores that under ``workspaces/<mlflow-name>/`` inside ARTIFACT_ROOT.
+    """
+    mlflow_name = to_mlflow_workspace_name(workspace_id)
+    return (
+        f"{artifact_root.rstrip('/')}/workspaces/{mlflow_name}"
+        f"/org/{organization_id}/workspace/{workspace_id}"
+    )
+
+
+def mlflow_proxied_artifact_root(organization_id: str, workspace_id: str) -> str:
+    """Client-facing artifact URI so uploads go through the tracking server."""
+    return f"mlflow-artifacts:/org/{organization_id}/workspace/{workspace_id}"
+
+
+def sync_workspaces(
+    session: Session, admin: MlflowAdmin, *, artifact_root: str | None = None
+) -> list[str]:
+    """Create MLflow workspaces for every live Tensorlane workspace.
+
+    Safe to run after switching ``MLFLOW_INTERNAL_URI`` from ``null://`` to a
+    real tracking server. HttpMlflowAdmin treats 409 as already-created.
+
+    When ``artifact_root`` is set, workspace rows whose stored prefix does not
+    match (for example ``file:///tmp/...`` from a local VM) are rewritten so
+    production disks or object storage stay consistent.
+    """
+    names: list[str] = []
+    rows = session.scalars(select(Workspace).where(Workspace.deleted_at.is_(None))).all()
+    for workspace in rows:
+        if artifact_root:
+            expected = workspace_artifact_root(
+                artifact_root, workspace.organization_id, workspace.id
+            )
+            if workspace.artifact_root != expected:
+                workspace.artifact_root = expected
+        admin.create_workspace(
+            workspace.mlflow_workspace_name,
+            mlflow_proxied_artifact_root(workspace.organization_id, workspace.id),
+            workspace.name,
+        )
+        names.append(workspace.mlflow_workspace_name)
+    return names
 
 
 def seed_demo(
@@ -106,6 +156,8 @@ def seed_demo(
             if other
             else None
         )
+        if mlflow is not None:
+            sync_workspaces(session, mlflow, artifact_root=artifact_root)
         return {
             "alice_user_id": existing.id,
             "bob_user_id": bob.id if bob else "",

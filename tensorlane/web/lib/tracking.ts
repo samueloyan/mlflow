@@ -1,3 +1,4 @@
+import { TRACE_SESSION_KEY } from "@/lib/brand";
 import { mlflowCall, type MlflowResult } from "@/lib/mlflow";
 
 export type Experiment = {
@@ -219,24 +220,64 @@ export async function listArtifacts(
   });
 }
 
+export const PROMPT_REGISTRY_FILTER = "tags.`mlflow.prompt.is_prompt` = 'true'";
+export const MODEL_REGISTRY_FILTER = "tags.`mlflow.prompt.is_prompt` != 'true'";
+
 export async function searchRegisteredModels(
   ctx: TrackingContext,
+  options?: { filter?: string; maxResults?: number },
 ): Promise<MlflowResult<{ registered_models?: RegisteredModel[] }>> {
-  return mlflowCall("/ajax-api/2.0/mlflow/registered-models/search?max_results=100", {
+  const params = new URLSearchParams();
+  params.set("max_results", String(options?.maxResults ?? 100));
+  if (options?.filter) params.set("filter", options.filter);
+  return mlflowCall(`/ajax-api/2.0/mlflow/registered-models/search?${params}`, {
     ...ctxInit(ctx),
     method: "GET",
   });
 }
 
+export async function searchPrompts(
+  ctx: TrackingContext,
+): Promise<MlflowResult<{ registered_models?: RegisteredModel[] }>> {
+  return searchRegisteredModels(ctx, { filter: PROMPT_REGISTRY_FILTER });
+}
+
+export type LoggedModelInfo = {
+  name?: string;
+  model_id?: string;
+  experiment_id?: string;
+  source_run_id?: string;
+  status?: string | number;
+  model_type?: string;
+  creation_timestamp_ms?: number;
+  last_updated_timestamp_ms?: number;
+};
+
+export type LoggedModel = {
+  info?: LoggedModelInfo;
+};
+
 export async function searchLoggedModels(
   ctx: TrackingContext,
   experimentIds?: string[],
-): Promise<MlflowResult<{ models?: { info?: { name?: string; experiment_id?: string; source_run_id?: string } }[] }>> {
+): Promise<MlflowResult<{ models?: LoggedModel[] }>> {
+  if (!experimentIds || experimentIds.length === 0) {
+    return { ok: true, data: { models: [] } };
+  }
   return mlflowCall("/ajax-api/2.0/mlflow/logged-models/search", {
     ...ctxInit(ctx),
     method: "POST",
-    body: JSON.stringify({ experiment_ids: experimentIds, max_results: 50 }),
+    body: JSON.stringify({ experiment_ids: experimentIds, max_results: 100 }),
   });
+}
+
+export function loggedModelStatus(status: string | number | undefined): string {
+  if (status === undefined || status === null || status === "") return "Unknown";
+  if (typeof status === "string") return status;
+  if (status === 1) return "Pending";
+  if (status === 2) return "Ready";
+  if (status === 3) return "Failed";
+  return String(status);
 }
 
 export function experimentLocations(experimentIds: string[]): { mlflow_experiment: { experiment_id: string } }[] {
@@ -267,21 +308,91 @@ export async function getTrace(
   ctx: TrackingContext,
   traceId: string,
 ): Promise<MlflowResult<{ trace?: { trace_info?: TraceInfo; spans?: TraceSpan[] } }>> {
-  const params = new URLSearchParams({ trace_id: traceId, allow_partial: "true" });
-  return mlflowCall(`/ajax-api/3.0/mlflow/traces/get?${params}`, {
+  return mlflowCall(`/ajax-api/3.0/mlflow/traces/${encodeURIComponent(traceId)}`, {
     ...ctxInit(ctx),
     method: "GET",
   });
+}
+
+function artifactLocationFromTrace(info: TraceInfo | undefined): string | null {
+  const tags = tagMap(info?.tags);
+  const location = tags["mlflow.artifactLocation"] || info?.trace_metadata?.["mlflow.artifactLocation"];
+  return location || null;
+}
+
+function tracesJsonPath(location: string): string {
+  const relative = location.replace(/^mlflow-artifacts:\/+/, "").replace(/^\/+/, "").replace(/\/+$/, "");
+  return relative.endsWith("traces.json") ? relative : `${relative}/traces.json`;
+}
+
+function spansFromPayload(data: unknown): TraceSpan[] {
+  if (!data) return [];
+  if (Array.isArray(data)) return data as TraceSpan[];
+  if (typeof data !== "object") return [];
+  const obj = data as { spans?: TraceSpan[]; data?: { spans?: TraceSpan[] } };
+  if (Array.isArray(obj.spans)) return obj.spans;
+  if (Array.isArray(obj.data?.spans)) return obj.data.spans;
+  return [];
 }
 
 export async function getTraceArtifact(
   ctx: TrackingContext,
   requestId: string,
 ): Promise<MlflowResult<{ spans?: TraceSpan[] }>> {
-  return mlflowCall(`/ajax-api/2.0/mlflow/get-trace-artifact?request_id=${encodeURIComponent(requestId)}`, {
-    ...ctxInit(ctx),
-    method: "GET",
-  });
+  const result = await mlflowCall<unknown>(
+    `/ajax-api/2.0/mlflow/get-trace-artifact?request_id=${encodeURIComponent(requestId)}`,
+    {
+      ...ctxInit(ctx),
+      method: "GET",
+    },
+  );
+  if (result.ok) {
+    const spans = spansFromPayload(result.data).map(normalizeTraceSpan);
+    if (spans.length) return { ok: true, data: { spans } };
+  }
+  const info = await getTrace(ctx, requestId);
+  if (!info.ok) return result.ok ? { ok: true, data: { spans: [] } } : result;
+  const location = artifactLocationFromTrace(info.data.trace?.trace_info);
+  if (!location) return result.ok ? { ok: true, data: { spans: [] } } : result;
+  const file = await mlflowCall<unknown>(
+    `/api/2.0/mlflow-artifacts/artifacts/${tracesJsonPath(location)}`,
+    {
+      ...ctxInit(ctx),
+      method: "GET",
+    },
+  );
+  if (!file.ok) return result.ok ? { ok: true, data: { spans: [] } } : result;
+  return { ok: true, data: { spans: spansFromPayload(file.data).map(normalizeTraceSpan) } };
+}
+
+function decodeJsonish(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  if (!trimmed) return value;
+  const first = trimmed[0];
+  const maybeJson =
+    first === "{" ||
+    first === "[" ||
+    first === '"' ||
+    trimmed === "true" ||
+    trimmed === "false" ||
+    trimmed === "null" ||
+    /^-?\d/.test(trimmed);
+  if (!maybeJson) return value;
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    return value;
+  }
+}
+
+export function normalizeTraceSpan(span: TraceSpan): TraceSpan {
+  const attributes = span.attributes ?? {};
+  const decoded: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(attributes)) {
+    decoded[key] = decodeJsonish(value);
+  }
+  return { ...span, attributes: decoded };
 }
 
 export function parseDurationMs(value: string | number | undefined): number | null {
@@ -326,6 +437,144 @@ export function spanIO(span: TraceSpan): { input: unknown; output: unknown } {
     input: attributes["mlflow.spanInputs"] ?? attributes.inputs,
     output: attributes["mlflow.spanOutputs"] ?? attributes.outputs,
   };
+}
+
+export function traceSessionId(trace: TraceInfo): string | null {
+  const fromMeta = trace.trace_metadata?.[TRACE_SESSION_KEY];
+  if (fromMeta) return fromMeta;
+  const tags = tagMap(trace.tags);
+  return tags[TRACE_SESSION_KEY] || tags.session || null;
+}
+
+export type Scorer = {
+  experiment_id?: number | string;
+  scorer_name?: string;
+  name?: string;
+  scorer_version?: number;
+  scorer_id?: string;
+  creation_time?: number;
+};
+
+export async function listScorers(
+  ctx: TrackingContext,
+  experimentId?: string,
+): Promise<MlflowResult<{ scorers?: Scorer[] }>> {
+  const params = new URLSearchParams();
+  if (experimentId) params.set("experiment_id", experimentId);
+  const query = params.toString();
+  return mlflowCall(`/ajax-api/3.0/mlflow/scorers/list${query ? `?${query}` : ""}`, {
+    ...ctxInit(ctx),
+    method: "GET",
+  });
+}
+
+export async function deleteScorer(
+  ctx: TrackingContext,
+  experimentId: string,
+  name: string,
+): Promise<MlflowResult<Record<string, never>>> {
+  return mlflowCall("/ajax-api/3.0/mlflow/scorers/delete", {
+    ...ctxInit(ctx),
+    method: "DELETE",
+    body: JSON.stringify({ experiment_id: experimentId, name }),
+  });
+}
+
+export function scorerName(scorer: Scorer): string {
+  return scorer.scorer_name || scorer.name || "scorer";
+}
+
+export type ReviewQueue = {
+  queue_id?: string;
+  experiment_id?: string;
+  name?: string;
+  queue_type?: string;
+  created_by?: string;
+  creation_time_ms?: number;
+  last_update_time_ms?: number;
+  users?: string[];
+  schema_ids?: string[];
+};
+
+export type ReviewQueueItem = {
+  queue_id?: string;
+  item_type?: string;
+  item_id?: string;
+  status?: string;
+  completed_by?: string;
+  completed_time_ms?: number;
+  creation_time_ms?: number;
+  last_update_time_ms?: number;
+};
+
+export async function listReviewQueues(
+  ctx: TrackingContext,
+  experimentId: string,
+): Promise<MlflowResult<{ review_queues?: ReviewQueue[]; next_page_token?: string }>> {
+  const params = new URLSearchParams({ experiment_id: experimentId });
+  return mlflowCall(`/ajax-api/3.0/mlflow/review-queues/list?${params}`, {
+    ...ctxInit(ctx),
+    method: "GET",
+  });
+}
+
+export async function createReviewQueue(
+  ctx: TrackingContext,
+  payload: { experiment_id: string; name: string; queue_type?: string; users?: string[] },
+): Promise<MlflowResult<{ review_queue?: ReviewQueue }>> {
+  return mlflowCall("/ajax-api/3.0/mlflow/review-queues/create", {
+    ...ctxInit(ctx),
+    method: "POST",
+    body: JSON.stringify({
+      experiment_id: payload.experiment_id,
+      name: payload.name,
+      queue_type: payload.queue_type ?? "CUSTOM",
+      users: payload.users ?? [],
+    }),
+  });
+}
+
+export async function listReviewQueueItems(
+  ctx: TrackingContext,
+  queueId: string,
+): Promise<MlflowResult<{ items?: ReviewQueueItem[]; next_page_token?: string }>> {
+  const params = new URLSearchParams({ queue_id: queueId, max_results: "100" });
+  return mlflowCall(`/ajax-api/3.0/mlflow/review-queues/items/list?${params}`, {
+    ...ctxInit(ctx),
+    method: "GET",
+  });
+}
+
+export type McpServer = {
+  name?: string;
+  display_name?: string;
+  description?: string;
+  status?: string;
+  latest_version?: string;
+  aliases?: { alias?: string; version?: string }[];
+  created_by?: string;
+  creation_timestamp?: number;
+  last_updated_timestamp?: number;
+};
+
+export async function searchMcpServers(
+  ctx: TrackingContext,
+): Promise<MlflowResult<{ mcp_servers?: McpServer[]; next_page_token?: string }>> {
+  return mlflowCall("/ajax-api/3.0/mlflow/mcp-servers?max_results=100", {
+    ...ctxInit(ctx),
+    method: "GET",
+  });
+}
+
+export async function createMcpServer(
+  ctx: TrackingContext,
+  payload: { name: string; description?: string },
+): Promise<MlflowResult<McpServer>> {
+  return mlflowCall("/ajax-api/3.0/mlflow/mcp-servers", {
+    ...ctxInit(ctx),
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function bucketByDay(timestamps: number[], days = 14): { label: string; value: number }[] {

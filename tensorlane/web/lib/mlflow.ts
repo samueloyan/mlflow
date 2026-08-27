@@ -42,11 +42,17 @@ export async function mlflowCall<T>(
       ...rest,
       credentials: "include",
       headers,
-      signal: rest.signal ?? AbortSignal.timeout(12_000),
+      signal: rest.signal ?? AbortSignal.timeout(30_000),
     });
-    const contentType = response.headers.get("content-type") ?? "";
-    const isJson = contentType.includes("json");
-    const payload = isJson ? ((await response.json()) as unknown) : null;
+    const text = await response.text();
+    let payload: unknown = null;
+    if (text) {
+      try {
+        payload = JSON.parse(text) as unknown;
+      } catch {
+        payload = null;
+      }
+    }
     if (!response.ok) {
       return {
         ok: false,
@@ -54,7 +60,7 @@ export async function mlflowCall<T>(
         message: errorMessage(payload, `Unable to reach the tracking service (${response.status}).`),
       };
     }
-    if (!isJson || payload === null) {
+    if (payload === null) {
       return { ok: false, status: response.status, message: "The tracking service returned a non-JSON response." };
     }
     return { ok: true, data: payload as T };

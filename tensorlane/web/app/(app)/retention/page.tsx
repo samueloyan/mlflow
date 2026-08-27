@@ -46,7 +46,7 @@ export default function RetentionPage() {
       <PageHeader
         kicker="Manage"
         title="Retention"
-        lede="Policy lives on the organization. Destructive purge of MLflow rows is gated; scans record intent first so operators can review jobs."
+        lede="Policy lives on the organization. The worker purges expired runs, traces, and local artifacts on each scan."
       />
       {message ? <div className="banner warn">{message}</div> : null}
       <form className="card span-6" style={{ maxWidth: 520 }} onSubmit={(event) => void save(event)}>

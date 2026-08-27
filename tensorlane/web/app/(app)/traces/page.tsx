@@ -196,7 +196,7 @@ function TracesInner() {
                 </>
               }
               emptyTitle="No traces yet"
-              emptyBody="Instrument with mlflow.trace or an OpenTelemetry exporter pointed at this host."
+              emptyBody="Instrument with Tensorlane tracing or an OpenTelemetry exporter pointed at this host."
               onRowClick={(row) => {
                 const id = row.trace_id || row.request_id;
                 if (id) router.push(`/traces/${id}`);

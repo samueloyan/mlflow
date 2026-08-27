@@ -181,6 +181,37 @@ def usage_sum(session: Session, organization_id: str, metric: str) -> float:
     return float(total or 0)
 
 
+def set_usage(
+    session: Session,
+    organization_id: str,
+    metric: str,
+    quantity: float,
+    idempotency_key: str,
+    workspace_id: str | None = None,
+) -> None:
+    from tensorlane.db.models import UsageRecord
+    from tensorlane.ids import USAGE_PREFIX, new_id
+
+    existing = session.scalar(
+        select(UsageRecord).where(UsageRecord.idempotency_key == idempotency_key)
+    )
+    if existing is not None:
+        existing.quantity = quantity
+        if workspace_id is not None:
+            existing.workspace_id = workspace_id
+        return
+    session.add(
+        UsageRecord(
+            id=new_id(USAGE_PREFIX),
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            metric=metric,
+            quantity=quantity,
+            idempotency_key=idempotency_key,
+        )
+    )
+
+
 def get_user(session: Session, user_id: str) -> User:
     user = session.get(User, user_id)
     if user is None:

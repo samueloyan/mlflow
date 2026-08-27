@@ -12,6 +12,7 @@ import { ToastProvider } from "@/components/ui/Toast";
 import { api, type Me, type Organization, type Workspace } from "@/lib/api";
 import { visibleNav } from "@/lib/nav";
 import { ShellContext } from "@/lib/shell";
+import { persistTenantCookies } from "@/lib/tenantCookies";
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -22,6 +23,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [planeWarning, setPlaneWarning] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const [navOpen, setNavOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -38,27 +40,49 @@ export function Shell({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     async function load() {
       try {
-        const profile = await api<Me>("/api/v1/me");
-        const orgs = await api<Organization[]>("/api/v1/organizations");
-        if (cancelled) return;
-        setMe(profile);
-        setOrganizations(orgs);
-        if (orgs.length === 0) {
-          if (pathname !== "/onboarding") {
-            router.replace("/onboarding");
-          }
+        const sessionResponse = await fetch("/api/auth/get-session", { credentials: "include" });
+        const session = (await sessionResponse.json()) as {
+          user?: { id: string; email: string; name?: string | null };
+        } | null;
+        if (!session?.user) {
+          if (!cancelled) router.replace("/login");
           return;
         }
-        const stored = window.localStorage.getItem("tensorlane.org");
-        const nextOrg = orgs.find((org) => org.id === stored)?.id ?? orgs[0]?.id ?? null;
-        setOrganizationId(nextOrg);
+        const sessionMe: Me = {
+          id: session.user.id,
+          email: session.user.email,
+          name: session.user.name ?? "",
+          organizations: [],
+        };
+        if (cancelled) return;
+        setMe(sessionMe);
+        setError(null);
+        try {
+          const profile = await api<Me>("/api/v1/me");
+          const orgs = await api<Organization[]>("/api/v1/organizations");
+          if (cancelled) return;
+          setMe({ ...profile, name: profile.name || sessionMe.name, email: profile.email || sessionMe.email });
+          setOrganizations(orgs);
+          setPlaneWarning(null);
+          if (orgs.length === 0) {
+            if (pathname !== "/onboarding") {
+              router.replace("/onboarding");
+            }
+            return;
+          }
+          const stored = window.localStorage.getItem("tensorlane.org");
+          const nextOrg = orgs.find((org) => org.id === stored)?.id ?? orgs[0]?.id ?? null;
+          setOrganizationId(nextOrg);
+        } catch (err) {
+          if (!cancelled) {
+            setPlaneWarning(
+              err instanceof Error ? err.message : "Unable to reach the Tensorlane control plane.",
+            );
+          }
+        }
       } catch (err) {
         if (!cancelled) {
           const message = err instanceof Error ? err.message : "Unable to load workspace.";
-          if (message.toLowerCase().includes("authentication")) {
-            router.replace("/login");
-            return;
-          }
           setError(message);
         }
       }
@@ -74,12 +98,16 @@ export function Shell({ children }: { children: React.ReactNode }) {
     window.localStorage.setItem("tensorlane.org", organizationId);
     let cancelled = false;
     async function loadWorkspaces() {
-      const rows = await api<Workspace[]>(`/api/v1/workspaces?organization_id=${organizationId}`);
-      if (cancelled) return;
-      setWorkspaces(rows);
-      const stored = window.localStorage.getItem("tensorlane.workspace");
-      const next = rows.find((row) => row.id === stored)?.id ?? rows[0]?.id ?? null;
-      setWorkspaceId(next);
+      try {
+        const rows = await api<Workspace[]>(`/api/v1/workspaces?organization_id=${organizationId}`);
+        if (cancelled) return;
+        setWorkspaces(rows);
+        const stored = window.localStorage.getItem("tensorlane.workspace");
+        const next = rows.find((row) => row.id === stored)?.id ?? rows[0]?.id ?? null;
+        setWorkspaceId(next);
+      } catch {
+        if (!cancelled) setWorkspaces([]);
+      }
     }
     void loadWorkspaces();
     return () => {
@@ -90,8 +118,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (workspaceId) {
       window.localStorage.setItem("tensorlane.workspace", workspaceId);
+      persistTenantCookies(organizationId, workspaceId);
     }
-  }, [workspaceId]);
+  }, [organizationId, workspaceId]);
 
   useEffect(() => {
     setNavOpen(false);
@@ -171,6 +200,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           />
           <div className="main-col">
             <Header onSearch={() => setPaletteOpen(true)} />
+            {planeWarning ? <div className="banner danger">{planeWarning}</div> : null}
             {organization ? <UsageBanner /> : null}
             <main id="main">{children}</main>
           </div>
