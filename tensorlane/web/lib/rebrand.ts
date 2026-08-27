@@ -64,13 +64,19 @@ function hideEl(el: Element): void {
 function maskLogos(root: ParentNode): void {
   root.querySelectorAll("svg").forEach((svg) => {
     if (!isLogo(svg)) return;
-    hideEl(svg);
-    while (svg.firstChild) svg.removeChild(svg.firstChild);
     const link = svg.closest("a");
-    if (link) hideEl(link);
     const host = link?.parentElement ?? svg.parentElement;
+    if (link) {
+      if (link.getAttribute("data-tensorlane-hidden-logo") !== "1") {
+        hideEl(link);
+        link.setAttribute("data-tensorlane-hidden-logo", "1");
+      }
+    } else {
+      hideEl(svg);
+    }
     if (!host) return;
-    if (host.querySelector("#tensorlane-sidebar-wordmark")) return;
+    const owner = root instanceof Document ? root : (root.ownerDocument ?? document);
+    if (owner.getElementById("tensorlane-sidebar-wordmark")) return;
     const mark = createIn(root, "span");
     mark.id = "tensorlane-sidebar-wordmark";
     mark.className = "tensorlane-wordmark";
@@ -81,6 +87,7 @@ function maskLogos(root: ParentNode): void {
 
 function hideVendorMedia(root: ParentNode): void {
   root.querySelectorAll("a[href],img[src]").forEach((el) => {
+    if (el.getAttribute("data-tensorlane-hidden-logo") === "1") return;
     const url = el.getAttribute("href") || el.getAttribute("src") || "";
     if (!vendorUrl(url)) return;
     hideEl(el);
@@ -136,13 +143,14 @@ export function injectTrackingRebrand(doc: Document): () => void {
   marked?.setAttribute("data-tensorlane-rebrand", "1");
   ensureChromeStyles(doc);
 
+  let paused = false;
   let scheduled = false;
   const run = () => {
     scheduled = false;
     paint(doc);
   };
   const schedule = () => {
-    paint(doc);
+    if (paused) return;
     if (scheduled) return;
     scheduled = true;
     const raf = doc.defaultView?.requestAnimationFrame ?? requestAnimationFrame;
@@ -150,7 +158,17 @@ export function injectTrackingRebrand(doc: Document): () => void {
   };
 
   paint(doc);
-  const observer = new MutationObserver(schedule);
+  const observer = new MutationObserver(() => {
+    if (paused) return;
+    paused = true;
+    try {
+      maskLogos(doc);
+      hideVendorMedia(doc);
+    } finally {
+      paused = false;
+    }
+    schedule();
+  });
   observer.observe(doc.documentElement, {
     childList: true,
     subtree: true,

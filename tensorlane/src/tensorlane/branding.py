@@ -78,13 +78,18 @@ REBRAND_JS = r"""
     for (var i = 0; i < svgs.length; i++){
       var svg = svgs[i];
       if (!isLogo(svg)) continue;
-      hideEl(svg);
-      while (svg.firstChild) svg.removeChild(svg.firstChild);
       var link = svg.closest ? svg.closest("a") : svg.parentNode;
-      if (link && link.nodeName === "A") hideEl(link);
-      var host = (link && link.nodeName === "A" ? link.parentNode : svg.parentNode);
+      var host = (link && link.nodeName === "A") ? link.parentNode : svg.parentNode;
+      if (link && link.nodeName === "A"){
+        if (link.getAttribute("data-tensorlane-hidden-logo") !== "1"){
+          hideEl(link);
+          link.setAttribute("data-tensorlane-hidden-logo","1");
+        }
+      } else {
+        hideEl(svg);
+      }
       if (!host) continue;
-      if (host.querySelector && host.querySelector("#tensorlane-sidebar-wordmark")) continue;
+      if (document.getElementById("tensorlane-sidebar-wordmark")) continue;
       var mark = document.createElement("span");
       mark.id = "tensorlane-sidebar-wordmark";
       mark.className = "tensorlane-wordmark";
@@ -94,6 +99,7 @@ REBRAND_JS = r"""
     var media = root.querySelectorAll("a[href],img[src]");
     for (var j = 0; j < media.length; j++){
       var el = media[j];
+      if (el.getAttribute("data-tensorlane-hidden-logo") === "1") continue;
       var url = el.getAttribute("href") || el.getAttribute("src") || "";
       if (!vendorUrl(url)) continue;
       hideEl(el);
@@ -119,6 +125,7 @@ REBRAND_JS = r"""
     }
     for (var c = node.firstChild; c; c = c.nextSibling) walk(c);
   }
+  var paused = false;
   var scheduled = false;
   function run(){
     scheduled = false;
@@ -127,13 +134,20 @@ REBRAND_JS = r"""
     chrome(document);
   }
   function schedule(){
+    if (paused) return;
     chrome(document);
     if (scheduled) return;
     scheduled = true;
     requestAnimationFrame(run);
   }
   run();
-  new MutationObserver(schedule).observe(document.documentElement,{
+  new MutationObserver(function(){
+    if (paused) return;
+    paused = true;
+    try { chrome(document); }
+    finally { paused = false; }
+    schedule();
+  }).observe(document.documentElement,{
     childList:true,subtree:true,characterData:true,attributes:true,
     attributeFilter:["title","aria-label","alt","placeholder","aria-description","href","src"]
   });
