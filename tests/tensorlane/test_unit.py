@@ -534,10 +534,13 @@ def test_rebrand_visible_text_is_tensorlane():
     assert "TENSORLANE_API_KEY" in rebrand_visible_text("export MLFLOW_TRACKING_TOKEN=secret")
     assert "</script>" not in REBRAND_JS
     assert "</style>" not in REBRAND_CSS
+    assert "requestAnimationFrame" in REBRAND_JS
     html = inject_tracking_rebrand(
         "<html><head><title>MLflow</title></head><body>Welcome to MLflow</body></html>"
     ).decode("utf-8")
     assert "<title>Tensorlane</title>" in html
+    assert "Welcome to Tensorlane" in html
+    assert "Welcome to MLflow" not in html
     assert 'data-tensorlane-rebrand="1"' in html
     assert 'data-tensorlane-rebrand-css="1"' in html
     assert 'svg[viewBox="0 0 109 40"]' in html
@@ -548,6 +551,31 @@ def test_rebrand_visible_text_is_tensorlane():
     unavailable = tracking_unavailable_html().lower()
     assert "mlflow" not in unavailable
     assert "tensorlane" in unavailable
+
+    from tensorlane.branding import rebrand_ui_asset
+
+    bundle = rebrand_ui_asset(
+        b'defaultMessage:"Welcome to MLflow"',
+        "application/javascript",
+        "/static-files/main.abc123.js",
+    )
+    assert bundle == b'defaultMessage:"Welcome to Tensorlane"'
+    assert (
+        rebrand_ui_asset(
+            b'{"message":"Welcome to MLflow"}',
+            "application/json",
+            "/ajax-api/2.0/mlflow/experiments/search",
+        )
+        is None
+    )
+    assert (
+        rebrand_ui_asset(
+            b'const path="/ajax-api/2.0/mlflow/experiments/search"',
+            "application/javascript",
+            "/static-files/main.abc123.js",
+        )
+        is None
+    )
 
 
 def test_track_module_import_does_not_require_protocol_library():

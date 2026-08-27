@@ -27,6 +27,7 @@ from tensorlane.authz import authorize
 from tensorlane.branding import (
     inject_tracking_rebrand,
     is_tracking_html,
+    rebrand_ui_asset,
     tracking_unavailable_html,
 )
 from tensorlane.config import Settings
@@ -137,6 +138,13 @@ def _mlflow_unavailable() -> Response:
         media_type="text/html",
         status_code=200,
     )
+
+
+def _drop_entity_headers(headers: dict[str, str]) -> None:
+    for name in ("content-length", "content-encoding"):
+        for key in list(headers):
+            if key.lower() == name:
+                headers.pop(key, None)
 
 
 def _is_mlflow_path(path: str) -> bool:
@@ -457,6 +465,12 @@ async def _proxy_mlflow(app: FastAPI, request: Request, path: str) -> Response:
     upstream_path = mlflow_upstream_path(path, settings.mlflow_static_prefix)
     target = httpx.URL(settings.mlflow_internal_uri.rstrip("/") + upstream_path)
     headers = _filter_request_headers(request, strip_credentials=True)
+    if request.method == "GET" and "/static-files/" in path.lower():
+        headers = {
+            key: value
+            for key, value in headers.items()
+            if key.lower() not in {"if-none-match", "if-modified-since"}
+        }
     headers["x-mlflow-workspace"] = mlflow_workspace_name
     headers["x-request-id"] = request_id
     headers["x-tensorlane-organization-id"] = organization_id
@@ -520,14 +534,16 @@ async def _proxy_mlflow(app: FastAPI, request: Request, path: str) -> Response:
             return fallback
     response_headers = {k: v for k, v in upstream.headers.items() if k.lower() not in HOP_BY_HOP}
     body = upstream.content
-    if (
-        request.method == "GET"
-        and upstream.status_code == 200
-        and is_tracking_html(request.method, upstream.headers.get("content-type"))
-    ):
-        body = inject_tracking_rebrand(body)
-        response_headers.pop("content-length", None)
-        response_headers.pop("Content-Length", None)
+    content_type = upstream.headers.get("content-type")
+    if request.method == "GET" and upstream.status_code == 200:
+        if is_tracking_html(request.method, content_type):
+            body = inject_tracking_rebrand(body)
+            _drop_entity_headers(response_headers)
+        else:
+            patched = rebrand_ui_asset(body, content_type, path)
+            if patched is not None:
+                body = patched
+                _drop_entity_headers(response_headers)
     return Response(content=body, status_code=upstream.status_code, headers=response_headers)
 
 

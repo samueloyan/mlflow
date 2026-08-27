@@ -15,6 +15,12 @@ _PHRASE_REPLACEMENTS: tuple[tuple[str, str], ...] = (
     ('pip install "mlflow', 'pip install "tensorlane'),
 )
 
+# Surgical source rewrites for the workbench JS/HTML. Do not replace bare
+# "mlflow" here — that would break protocol paths in the bundle.
+_SOURCE_REPLACEMENTS: tuple[tuple[str, str], ...] = (
+    ("Welcome to MLflow", f"Welcome to {PRODUCT_NAME}"),
+)
+
 _TITLE_RE = re.compile(r"(<title\b[^>]*>)(.*?)(</title>)", re.IGNORECASE | re.DOTALL)
 
 # Hide the protocol wordmark SVG (letterforms, not text) and vendor docs links.
@@ -126,10 +132,20 @@ REBRAND_JS = r"""
   }
   function run(){
     if (document.title) document.title = swap(document.title);
-    if (document.body) walk(document.body);
+    var body = document.body;
+    if (body && (body.innerHTML.indexOf("MLflow") >= 0 || body.innerHTML.indexOf("Mlflow") >= 0)) {
+      walk(body);
+    }
     chrome(document);
   }
   run();
+  var frames = 0;
+  function burst(){
+    run();
+    frames += 1;
+    if (frames < 45) requestAnimationFrame(burst);
+  }
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(burst);
   setInterval(run, 400);
 })();
 """.strip()
@@ -146,7 +162,7 @@ _CHROME_TAG = (
 
 def rebrand_visible_text(value: str) -> str:
     """Replace protocol product names in user-visible copy. Do not use on URLs or JSON."""
-    out = value
+    out = rebrand_ui_source(value)
     for source, target in _PHRASE_REPLACEMENTS:
         out = out.replace(source, target)
     return (
@@ -156,6 +172,46 @@ def rebrand_visible_text(value: str) -> str:
         .replace("MLFLOW", "TENSORLANE")
         .replace("mlflow", "tensorlane")
     )
+
+
+def rebrand_ui_source(value: str) -> str:
+    """Rewrite workbench chrome strings without touching protocol paths."""
+    out = value
+    for source, target in _SOURCE_REPLACEMENTS:
+        out = out.replace(source, target)
+    return out
+
+
+def is_tracking_ui_asset(path: str, content_type: str | None) -> bool:
+    """True for workbench JS/JSON bundles. Never rewrite protocol API payloads."""
+    route = path.lower().split("?", 1)[0]
+    if any(token in route for token in ("/ajax-api/", "/api/2.0/", "/api/3.0/", "/graphql")):
+        return False
+    if route.endswith(".map"):
+        return False
+    static = "/static-files/" in route or route.endswith("/static-files")
+    ct = (content_type or "").lower()
+    if "html" in ct:
+        return False
+    if static and any(token in ct for token in ("javascript", "ecmascript", "json")):
+        return True
+    if static and route.endswith((".js", ".mjs", ".json")):
+        return True
+    return False
+
+
+def rebrand_ui_asset(body: bytes, content_type: str | None, path: str) -> bytes | None:
+    """Patch Welcome-to-MLflow and related chrome in a UI bundle. None if unchanged."""
+    if not is_tracking_ui_asset(path, content_type):
+        return None
+    try:
+        text = body.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    patched = rebrand_ui_source(text)
+    if patched == text:
+        return None
+    return patched.encode("utf-8")
 
 
 def tracking_unavailable_html() -> str:
@@ -175,6 +231,7 @@ def inject_tracking_rebrand(html: bytes | str) -> bytes:
     text = html.decode("utf-8", errors="replace") if isinstance(html, (bytes, bytearray)) else html
     if "data-tensorlane-rebrand" in text:
         return text.encode("utf-8")
+    text = rebrand_ui_source(text)
 
     def _title(match: re.Match[str]) -> str:
         return match.group(1) + rebrand_visible_text(match.group(2)) + match.group(3)

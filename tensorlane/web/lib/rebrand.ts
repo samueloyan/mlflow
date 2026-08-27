@@ -1,6 +1,7 @@
 /** Replace protocol product names in user-visible copy. Do not run on URLs or JSON. */
 
 const PHRASE_REPLACEMENTS: readonly [string, string][] = [
+  ["Welcome to MLflow", "Welcome to Tensorlane"],
   ["MLFLOW_TRACKING_TOKEN", "TENSORLANE_API_KEY"],
   ["MLFLOW_TRACKING_URI", "TENSORLANE_TRACKING_URI"],
   ["MLFLOW_CRYPTO_KEK_PASSPHRASE", "TENSORLANE_ENCRYPTION_KEY"],
@@ -131,7 +132,10 @@ function ensureChromeStyles(doc: Document): void {
 
 function paint(doc: Document): void {
   if (doc.title) doc.title = rebrandVisibleText(doc.title);
-  if (doc.body) walk(doc.body);
+  const body = doc.body;
+  if (body && (body.innerHTML.includes("MLflow") || body.innerHTML.includes("Mlflow"))) {
+    walk(body);
+  }
   maskLogos(doc);
   hideVendorMedia(doc);
 }
@@ -148,6 +152,19 @@ export function injectTrackingRebrand(doc: Document): () => void {
 
   paint(doc);
   const view = doc.defaultView ?? window;
+  let frames = 0;
+  let raf = 0;
+  const burst = () => {
+    paint(doc);
+    frames += 1;
+    if (frames < 45) {
+      raf = view.requestAnimationFrame(burst);
+    }
+  };
+  raf = view.requestAnimationFrame(burst);
   const timer = view.setInterval(() => paint(doc), 400);
-  return () => view.clearInterval(timer);
+  return () => {
+    view.cancelAnimationFrame(raf);
+    view.clearInterval(timer);
+  };
 }

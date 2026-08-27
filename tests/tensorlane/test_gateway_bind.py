@@ -10,7 +10,7 @@ import uvicorn
 from fastapi.testclient import TestClient
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, JSONResponse
+from starlette.responses import HTMLResponse, JSONResponse, Response
 from starlette.routing import Route
 from tensorlane.api.app import create_app
 from tensorlane.config import Settings
@@ -246,10 +246,68 @@ def test_session_workspace_cookie_binds_iframe_when_org_has_two_workspaces(tmp_p
             db.close()
         assert allowed.status_code == 200, allowed.text
         assert b"<title>Tensorlane</title>" in allowed.content
+        assert b"Welcome to Tensorlane" in allowed.content
+        assert b"Welcome to MLflow" not in allowed.content
         assert b'data-tensorlane-rebrand="1"' in allowed.content
         assert b'data-tensorlane-rebrand-css="1"' in allowed.content
         assert b'svg[viewBox="0 0 109 40"]' in allowed.content
         assert captured["workspace"] == production.mlflow_workspace_name
+    finally:
+        server.should_exit = True
+
+
+def test_static_workbench_bundle_rewrites_welcome_heading(tmp_path):
+    captured.clear()
+    port = _free_port()
+
+    async def bundle(request: Request) -> Response:
+        captured["path"] = request.url.path
+        captured["if_none_match"] = request.headers.get("if-none-match")
+        return Response(
+            'defaultMessage:"Welcome to MLflow"',
+            media_type="application/javascript",
+            headers={"ETag": '"abc"', "Cache-Control": "public, max-age=31536000"},
+        )
+
+    starlette_app = Starlette(
+        routes=[Route("/mlflow/static-files/main.js", bundle, methods=["GET"])]
+    )
+    config = uvicorn.Config(starlette_app, host="127.0.0.1", port=port, log_level="error")
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    _wait_for_port(port)
+    try:
+        settings = Settings(
+            database_url=f"sqlite:///{tmp_path}/tensorlane.db",
+            mlflow_internal_uri=f"http://127.0.0.1:{port}",
+            mlflow_static_prefix="/mlflow",
+            tensorlane_pepper="test-pepper",
+            artifact_root="file:///tmp/tensorlane-artifacts",
+            control_plane_rpm=0,
+            mlflow_write_rpm=0,
+        )
+        app = create_app(settings)
+        with TestClient(app) as client:
+            db = session_factory()()
+            alice = create_user(db, "alice@acme.test", "Alice")
+            create_session_token(db, alice, "alice-session")
+            _acme, production = create_org_with_owner(db, alice, "Acme")
+            db.commit()
+            client.cookies.set("tensorlane.workspace", production.id)
+            allowed = client.get(
+                "/static-files/main.js",
+                headers={
+                    "Authorization": "Bearer alice-session",
+                    "If-None-Match": '"abc"',
+                },
+            )
+            db.close()
+        assert allowed.status_code == 200, allowed.text
+        assert allowed.text == 'defaultMessage:"Welcome to Tensorlane"'
+        assert "Welcome to MLflow" not in allowed.text
+        assert captured["path"] == "/mlflow/static-files/main.js"
+        assert captured["if_none_match"] is None
     finally:
         server.should_exit = True
 
