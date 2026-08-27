@@ -26,6 +26,7 @@ svg[viewBox="0 0 109 40"],svg[viewbox="0 0 109 40"],svg[width="109"][height="40"
 .tensorlane-wordmark{display:block;font:500 17px/24px Georgia,Times New Roman,serif;
   letter-spacing:.04em;color:inherit}
 a[href*="mlflow.org"]{display:none!important}
+aside a:has(svg[width="109"]),aside a:has(svg[viewBox="0 0 109 40"]){display:none!important}
 img[src*="mlflow.org"],img[src*="MLflow-logo"]{display:none!important}
 """.strip()
 
@@ -79,13 +80,16 @@ REBRAND_JS = r"""
       if (!isLogo(svg)) continue;
       hideEl(svg);
       while (svg.firstChild) svg.removeChild(svg.firstChild);
-      var parent = svg.parentNode;
-      if (!parent) continue;
-      if (parent.querySelector && parent.querySelector(".tensorlane-wordmark")) continue;
+      var link = svg.closest ? svg.closest("a") : svg.parentNode;
+      if (link && link.nodeName === "A") hideEl(link);
+      var host = (link && link.nodeName === "A" ? link.parentNode : svg.parentNode);
+      if (!host) continue;
+      if (host.querySelector && host.querySelector("#tensorlane-sidebar-wordmark")) continue;
       var mark = document.createElement("span");
+      mark.id = "tensorlane-sidebar-wordmark";
       mark.className = "tensorlane-wordmark";
       mark.textContent = "tensorlane";
-      parent.insertBefore(mark, svg);
+      host.insertBefore(mark, (link && link.nodeName === "A") ? link : svg);
     }
     var media = root.querySelectorAll("a[href],img[src]");
     for (var j = 0; j < media.length; j++){

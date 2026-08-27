@@ -543,6 +543,7 @@ def test_rebrand_visible_text_is_tensorlane():
     assert 'svg[viewBox="0 0 109 40"]' in html
     assert "31.0316" in html
     assert "tensorlane-wordmark" in html
+    assert "tensorlane-sidebar-wordmark" in html
     assert "setProperty" in html
     unavailable = tracking_unavailable_html().lower()
     assert "mlflow" not in unavailable

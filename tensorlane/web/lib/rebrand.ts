@@ -19,6 +19,7 @@ svg[viewBox="0 0 109 40"],svg[viewbox="0 0 109 40"],svg[width="109"][height="40"
 .tensorlane-wordmark{display:block;font:500 17px/24px Georgia,Times New Roman,serif;
   letter-spacing:.04em;color:inherit}
 a[href*="mlflow.org"]{display:none!important}
+aside a:has(svg[width="109"]),aside a:has(svg[viewBox="0 0 109 40"]){display:none!important}
 img[src*="mlflow.org"],img[src*="MLflow-logo"]{display:none!important}
 `.trim();
 
@@ -65,13 +66,16 @@ function maskLogos(root: ParentNode): void {
     if (!isLogo(svg)) return;
     hideEl(svg);
     while (svg.firstChild) svg.removeChild(svg.firstChild);
-    const parent = svg.parentElement;
-    if (!parent) return;
-    if (parent.querySelector(".tensorlane-wordmark")) return;
+    const link = svg.closest("a");
+    if (link) hideEl(link);
+    const host = link?.parentElement ?? svg.parentElement;
+    if (!host) return;
+    if (host.querySelector("#tensorlane-sidebar-wordmark")) return;
     const mark = createIn(root, "span");
+    mark.id = "tensorlane-sidebar-wordmark";
     mark.className = "tensorlane-wordmark";
     mark.textContent = "tensorlane";
-    parent.insertBefore(mark, svg);
+    host.insertBefore(mark, link ?? svg);
   });
 }
 
