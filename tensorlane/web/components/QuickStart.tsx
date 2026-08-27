@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { api, type ApiKey, type Member } from "@/lib/api";
+import { listGatewaySecrets } from "@/lib/gateway";
 import { useShell } from "@/lib/shell";
+import { useTrackingContext } from "@/lib/useTrackingContext";
 
 type Step = {
   id: string;
@@ -15,8 +17,10 @@ type Step = {
 
 export function QuickStart({ hasRun }: { hasRun: boolean }) {
   const { organization, workspace } = useShell();
+  const ctx = useTrackingContext();
   const [keys, setKeys] = useState(0);
   const [members, setMembers] = useState(1);
+  const [connections, setConnections] = useState(0);
   const [dismissed, setDismissed] = useState(true);
 
   useEffect(() => {
@@ -31,16 +35,24 @@ export function QuickStart({ hasRun }: { hasRun: boolean }) {
       .catch(() => setMembers(1));
   }, [organization]);
 
+  useEffect(() => {
+    if (!ctx) return;
+    void listGatewaySecrets(ctx).then((result) => {
+      setConnections(result.ok ? (result.data.secrets ?? []).length : 0);
+    });
+  }, [ctx]);
+
   const steps = useMemo<Step[]>(
     () => [
       { id: "org", label: "Create organization", href: "/onboarding", done: Boolean(organization) },
       { id: "workspace", label: "Create workspace", href: "/workspaces", done: Boolean(workspace) },
       { id: "key", label: "Create API key", href: "/api-keys", done: keys > 0 },
-      { id: "mlflow", label: "Configure MLflow", href: "/onboarding", done: hasRun || keys > 0 },
+      { id: "sdk", label: "Point the SDK at this workspace", href: "/onboarding", done: hasRun || keys > 0 },
       { id: "run", label: "Log first run", href: "/runs", done: hasRun },
+      { id: "llm", label: "Connect an LLM provider", href: "/integrations", done: connections > 0 },
       { id: "invite", label: "Invite teammate", href: "/members", done: members > 1 },
     ],
-    [hasRun, keys, members, organization, workspace],
+    [connections, hasRun, keys, members, organization, workspace],
   );
 
   const remaining = steps.filter((step) => !step.done).length;

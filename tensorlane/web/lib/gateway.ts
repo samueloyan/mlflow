@@ -29,6 +29,7 @@ export type GatewayEndpointMapping = {
   model_definition?: GatewayModelDefinition;
   linkage_type?: string;
   weight?: number;
+  fallback_order?: number;
 };
 
 export type GatewayEndpoint = {
@@ -40,6 +41,7 @@ export type GatewayEndpoint = {
   created_by?: string;
   routing_strategy?: string;
   usage_tracking?: boolean;
+  experiment_id?: string;
 };
 
 export type GatewayProviderField = {
@@ -62,11 +64,57 @@ export type GatewayProviderConfig = {
   default_mode?: string;
 };
 
+export type GatewayProviderModel = {
+  model?: string;
+  provider?: string;
+  supports_function_calling?: boolean;
+  supports_vision?: boolean;
+};
+
+export type ProviderOption = {
+  id: string;
+  name: string;
+  description: string;
+};
+
+export type BudgetDuration = {
+  unit?: string;
+  value?: number;
+};
+
+export type BudgetPolicy = {
+  budget_policy_id?: string;
+  budget_unit?: string;
+  budget_amount?: number;
+  duration?: BudgetDuration;
+  target_scope?: string;
+  budget_action?: string;
+  created_at?: number;
+  created_by?: string;
+};
+
+export type BudgetWindow = {
+  budget_policy_id?: string;
+  window_start_ms?: number;
+  window_end_ms?: number;
+  current_spend?: number;
+};
+
+export type GatewayGuardrail = {
+  guardrail_id?: string;
+  name?: string;
+  stage?: string;
+  action?: string;
+  created_at?: number;
+  created_by?: string;
+  scorer?: { scorer_id?: string; scorer_version?: number };
+};
+
 function ctxInit(ctx: TrackingContext, init?: RequestInit): RequestInit & TrackingContext {
   return { ...init, organizationId: ctx.organizationId, workspaceId: ctx.workspaceId };
 }
 
-export const FEATURED_PROVIDERS = [
+export const FEATURED_PROVIDERS: readonly ProviderOption[] = [
   { id: "openai", name: "OpenAI", description: "GPT models via chat, completions, and embeddings." },
   { id: "anthropic", name: "Anthropic", description: "Claude models for traces, judges, and serving." },
   { id: "gemini", name: "Google Gemini", description: "Gemini models on Google AI Studio." },
@@ -77,7 +125,9 @@ export const FEATURED_PROVIDERS = [
   { id: "deepseek", name: "DeepSeek", description: "DeepSeek chat models." },
   { id: "openrouter", name: "OpenRouter", description: "One key for many upstream model providers." },
   { id: "ollama", name: "Ollama", description: "Local or self-hosted models. Set the API base URL." },
-] as const;
+  { id: "xai", name: "xAI", description: "Grok models." },
+  { id: "together_ai", name: "Together AI", description: "Hosted open-weight chat models." },
+];
 
 export const DEFAULT_MODELS: Record<string, string> = {
   openai: "gpt-4o-mini",
@@ -101,13 +151,32 @@ export function providerLabel(provider: string | undefined): string {
   return provider.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+export function extraProviders(ids: string[] | undefined): ProviderOption[] {
+  const featured = new Set(FEATURED_PROVIDERS.map((row) => row.id));
+  return (ids ?? [])
+    .filter((id) => id && !featured.has(id))
+    .map((id) => ({
+      id,
+      name: providerLabel(id),
+      description: "Listed by the tracking server provider catalog.",
+    }));
+}
+
 export function endpointModel(endpoint: GatewayEndpoint): { provider: string; model: string } {
-  const mapping = endpoint.model_mappings?.find((row) => (row.linkage_type ?? "PRIMARY") === "PRIMARY")
-    ?? endpoint.model_mappings?.[0];
+  const mapping =
+    endpoint.model_mappings?.find((row) => (row.linkage_type ?? "PRIMARY") === "PRIMARY") ??
+    endpoint.model_mappings?.[0];
   return {
     provider: mapping?.model_definition?.provider ?? "",
     model: mapping?.model_definition?.model_name ?? "",
   };
+}
+
+export function slugGatewayName(value: string): string {
+  return value
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
 }
 
 export function gatewayInvokePath(endpointName: string): string {
@@ -116,6 +185,18 @@ export function gatewayInvokePath(endpointName: string): string {
 
 export function gatewayChatCompletionsPath(): string {
   return "/gateway/mlflow/v1/chat/completions";
+}
+
+export function gatewayOpenaiBasePath(): string {
+  return "/gateway/openai/v1";
+}
+
+export function gatewayAnthropicMessagesPath(): string {
+  return "/gateway/anthropic/v1/messages";
+}
+
+export function gatewayGeminiGeneratePath(endpointName: string): string {
+  return `/gateway/gemini/v1beta/models/${encodeURIComponent(endpointName)}:generateContent`;
 }
 
 export async function listGatewaySecrets(
@@ -158,6 +239,19 @@ export async function listSupportedProviders(
   });
 }
 
+export async function listSupportedModels(
+  ctx: TrackingContext,
+  provider?: string,
+): Promise<MlflowResult<{ models?: GatewayProviderModel[] }>> {
+  const params = new URLSearchParams();
+  if (provider) params.set("provider", provider);
+  const query = params.toString();
+  return mlflowCall(`/ajax-api/3.0/mlflow/gateway/supported-models${query ? `?${query}` : ""}`, {
+    ...ctxInit(ctx),
+    method: "GET",
+  });
+}
+
 export async function getProviderConfig(
   ctx: TrackingContext,
   provider: string,
@@ -189,6 +283,22 @@ export async function createGatewaySecret(
   },
 ): Promise<MlflowResult<{ secret?: GatewaySecret }>> {
   return mlflowCall("/ajax-api/3.0/mlflow/gateway/secrets/create", {
+    ...ctxInit(ctx),
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateGatewaySecret(
+  ctx: TrackingContext,
+  payload: {
+    secret_id: string;
+    secret_value?: Record<string, string>;
+    auth_config?: Record<string, string>;
+    updated_by?: string;
+  },
+): Promise<MlflowResult<{ secret?: GatewaySecret }>> {
+  return mlflowCall("/ajax-api/3.0/mlflow/gateway/secrets/update", {
     ...ctxInit(ctx),
     method: "POST",
     body: JSON.stringify(payload),
@@ -227,9 +337,15 @@ export async function createGatewayEndpoint(
   ctx: TrackingContext,
   payload: {
     name: string;
-    model_configs: { model_definition_id: string; linkage_type: string }[];
+    model_configs: {
+      model_definition_id: string;
+      linkage_type: string;
+      weight?: number;
+      fallback_order?: number;
+    }[];
     created_by?: string;
     usage_tracking?: boolean;
+    fallback_config?: { strategy: string; max_attempts: number };
   },
 ): Promise<MlflowResult<{ endpoint?: GatewayEndpoint }>> {
   return mlflowCall("/ajax-api/3.0/mlflow/gateway/endpoints/create", {
@@ -247,6 +363,84 @@ export async function deleteGatewayEndpoint(
     ...ctxInit(ctx),
     method: "DELETE",
     body: JSON.stringify({ endpoint_id: endpointId }),
+  });
+}
+
+export async function listBudgetPolicies(
+  ctx: TrackingContext,
+): Promise<MlflowResult<{ budget_policies?: BudgetPolicy[] }>> {
+  return mlflowCall("/ajax-api/3.0/mlflow/gateway/budgets/list?max_results=100", {
+    ...ctxInit(ctx),
+    method: "GET",
+  });
+}
+
+export async function listBudgetWindows(
+  ctx: TrackingContext,
+): Promise<MlflowResult<{ windows?: BudgetWindow[] }>> {
+  return mlflowCall("/ajax-api/3.0/mlflow/gateway/budgets/windows", {
+    ...ctxInit(ctx),
+    method: "GET",
+  });
+}
+
+export async function createBudgetPolicy(
+  ctx: TrackingContext,
+  payload: {
+    budget_unit: string;
+    budget_amount: number;
+    duration: { unit: string; value: number };
+    target_scope: string;
+    budget_action: string;
+    created_by?: string;
+  },
+): Promise<MlflowResult<{ budget_policy?: BudgetPolicy }>> {
+  return mlflowCall("/ajax-api/3.0/mlflow/gateway/budgets/create", {
+    ...ctxInit(ctx),
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteBudgetPolicy(
+  ctx: TrackingContext,
+  budgetPolicyId: string,
+): Promise<MlflowResult<Record<string, never>>> {
+  return mlflowCall("/ajax-api/3.0/mlflow/gateway/budgets/delete", {
+    ...ctxInit(ctx),
+    method: "DELETE",
+    body: JSON.stringify({ budget_policy_id: budgetPolicyId }),
+  });
+}
+
+export async function listGatewayGuardrails(
+  ctx: TrackingContext,
+): Promise<MlflowResult<{ guardrails?: GatewayGuardrail[] }>> {
+  return mlflowCall("/ajax-api/3.0/mlflow/gateway/guardrails/list?max_results=100", {
+    ...ctxInit(ctx),
+    method: "GET",
+  });
+}
+
+export async function deleteGatewayGuardrail(
+  ctx: TrackingContext,
+  guardrailId: string,
+): Promise<MlflowResult<Record<string, never>>> {
+  return mlflowCall("/ajax-api/3.0/mlflow/gateway/guardrails/delete", {
+    ...ctxInit(ctx),
+    method: "DELETE",
+    body: JSON.stringify({ guardrail_id: guardrailId }),
+  });
+}
+
+export async function addGuardrailToEndpoint(
+  ctx: TrackingContext,
+  payload: { endpoint_id: string; guardrail_id: string; execution_order?: number },
+): Promise<MlflowResult<{ config?: unknown }>> {
+  return mlflowCall("/ajax-api/3.0/mlflow/gateway/guardrails/add-to-endpoint", {
+    ...ctxInit(ctx),
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }
 
@@ -269,21 +463,21 @@ export async function invokeGatewayChat(
 
 export function sdkSnippet(trackingUri: string, endpointName: string): string {
   return `import os
-import httpx
+from openai import OpenAI
 
-tracking = "${trackingUri}"
-token = os.environ["MLFLOW_TRACKING_TOKEN"]
-
-response = httpx.post(
-    f"{tracking}/gateway/${endpointName}/mlflow/invocations",
-    headers={"Authorization": f"Bearer {token}"},
-    json={"messages": [{"role": "user", "content": "Hello"}]},
-    timeout=60,
+# Tensorlane API key. The SDK still reads MLFLOW_TRACKING_TOKEN.
+client = OpenAI(
+    api_key=os.environ["MLFLOW_TRACKING_TOKEN"],
+    base_url="${trackingUri}${gatewayOpenaiBasePath()}",
 )
-print(response.json())
+print(client.chat.completions.create(
+    model="${endpointName}",
+    messages=[{"role": "user", "content": "Hello"}],
+).choices[0].message.content)
 
-# OpenAI-compatible (model is the endpoint name):
-# from openai import OpenAI
-# client = OpenAI(api_key=token, base_url=f"{tracking}/gateway/mlflow/v1")
-# client.chat.completions.create(model="${endpointName}", messages=[{"role": "user", "content": "Hello"}])`;
+# Native invoke:
+# POST ${trackingUri}${gatewayInvokePath(endpointName)}
+# OpenAI-compatible (mlflow v1): ${trackingUri}${gatewayChatCompletionsPath()}
+# Anthropic: POST ${trackingUri}${gatewayAnthropicMessagesPath()}
+# Gemini: POST ${trackingUri}${gatewayGeminiGeneratePath(endpointName)}`;
 }

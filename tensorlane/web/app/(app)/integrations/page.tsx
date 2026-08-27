@@ -13,12 +13,16 @@ import {
   FEATURED_PROVIDERS,
   createGatewaySecret,
   deleteGatewaySecret,
+  extraProviders,
   getProviderConfig,
   getSecretsConfig,
   listGatewaySecrets,
+  listSupportedProviders,
   providerLabel,
+  updateGatewaySecret,
   type GatewayAuthMode,
   type GatewaySecret,
+  type ProviderOption,
 } from "@/lib/gateway";
 import { canWrite } from "@/lib/permissions";
 import { useShell } from "@/lib/shell";
@@ -53,7 +57,7 @@ const OTHER_INTEGRATIONS = [
   {
     category: "Development",
     name: "GitHub / GitLab",
-    description: "Source tags come from the MLflow SDK in CI. There is no OAuth app yet.",
+    description: "Source tags come from the SDK in CI. There is no OAuth app yet.",
     live: false,
   },
 ];
@@ -67,25 +71,60 @@ function fallbackAuthMode(): GatewayAuthMode {
   };
 }
 
+function collectFields(
+  authMode: GatewayAuthMode,
+  fields: Record<string, string>,
+): { secretValue: Record<string, string>; authConfig: Record<string, string>; missing: string | null } {
+  const secretValue: Record<string, string> = {};
+  const authConfig: Record<string, string> = {};
+  for (const field of authMode.secret_fields ?? []) {
+    if (!field.name) continue;
+    const value = (fields[field.name] ?? "").trim();
+    if (field.required && !value) {
+      return { secretValue, authConfig, missing: field.description || field.name };
+    }
+    if (value) secretValue[field.name] = value;
+  }
+  for (const field of authMode.config_fields ?? []) {
+    if (!field.name) continue;
+    const value = (fields[field.name] ?? "").trim();
+    if (field.required && !value) {
+      return { secretValue, authConfig, missing: field.description || field.name };
+    }
+    if (value) authConfig[field.name] = value;
+  }
+  return { secretValue, authConfig, missing: null };
+}
+
 export default function IntegrationsPage() {
   const { me, role } = useShell();
   const ctx = useTrackingContext();
   const toast = useToast();
   const canManage = canWrite(role);
   const [secrets, setSecrets] = useState<GatewaySecret[]>([]);
+  const [catalog, setCatalog] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [defaultKek, setDefaultKek] = useState(false);
-  const [selected, setSelected] = useState<(typeof FEATURED_PROVIDERS)[number] | null>(null);
+  const [selected, setSelected] = useState<ProviderOption | null>(null);
   const [authMode, setAuthMode] = useState<GatewayAuthMode>(fallbackAuthMode());
   const [secretName, setSecretName] = useState("");
   const [fields, setFields] = useState<Record<string, string>>({});
+  const [rotateId, setRotateId] = useState<string | null>(null);
+  const [rotateFields, setRotateFields] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+
+  const extras = useMemo(() => extraProviders(catalog), [catalog]);
+  const providers = useMemo(() => [...FEATURED_PROVIDERS, ...extras], [extras]);
 
   async function refresh() {
     if (!ctx) return;
     setLoading(true);
-    const [listed, config] = await Promise.all([listGatewaySecrets(ctx), getSecretsConfig(ctx)]);
+    const [listed, config, providersResult] = await Promise.all([
+      listGatewaySecrets(ctx),
+      getSecretsConfig(ctx),
+      listSupportedProviders(ctx),
+    ]);
     if (!listed.ok) {
       setError(listed.message);
       setSecrets([]);
@@ -95,6 +134,7 @@ export default function IntegrationsPage() {
     setError(null);
     setSecrets(listed.data.secrets ?? []);
     setDefaultKek(Boolean(config.ok && config.data.using_default_passphrase));
+    setCatalog(providersResult.ok ? (providersResult.data.providers ?? []) : []);
     setLoading(false);
   }
 
@@ -106,6 +146,8 @@ export default function IntegrationsPage() {
     if (!selected || !ctx) return;
     setSecretName(`${selected.id}-${me.email.split("@")[0] || "prod"}`);
     setFields({});
+    setRotateFields({});
+    setRotateId(null);
     void getProviderConfig(ctx, selected.id).then((result) => {
       if (!result.ok) {
         setAuthMode(fallbackAuthMode());
@@ -130,32 +172,17 @@ export default function IntegrationsPage() {
   async function connect(event: React.FormEvent) {
     event.preventDefault();
     if (!ctx || !selected) return;
-    const secretValue: Record<string, string> = {};
-    const authConfig: Record<string, string> = {};
-    for (const field of authMode.secret_fields ?? []) {
-      if (!field.name) continue;
-      const value = (fields[field.name] ?? "").trim();
-      if (field.required && !value) {
-        toast.push(`${field.description || field.name} is required.`, "error");
-        return;
-      }
-      if (value) secretValue[field.name] = value;
-    }
-    for (const field of authMode.config_fields ?? []) {
-      if (!field.name) continue;
-      const value = (fields[field.name] ?? "").trim();
-      if (field.required && !value) {
-        toast.push(`${field.description || field.name} is required.`, "error");
-        return;
-      }
-      if (value) authConfig[field.name] = value;
+    const collected = collectFields(authMode, fields);
+    if (collected.missing) {
+      toast.push(`${collected.missing} is required.`, "error");
+      return;
     }
     setSaving(true);
     const created = await createGatewaySecret(ctx, {
       secret_name: secretName.trim(),
-      secret_value: secretValue,
+      secret_value: collected.secretValue,
       provider: selected.id,
-      auth_config: Object.keys(authConfig).length ? authConfig : undefined,
+      auth_config: Object.keys(collected.authConfig).length ? collected.authConfig : undefined,
       created_by: me.email,
     });
     setSaving(false);
@@ -165,6 +192,39 @@ export default function IntegrationsPage() {
     }
     toast.push(`${selected.name} connected.`, "success");
     setSelected(null);
+    await refresh();
+  }
+
+  async function rotate(event: React.FormEvent, secret: GatewaySecret) {
+    event.preventDefault();
+    if (!ctx || !secret.secret_id) return;
+    const collected = collectFields(
+      {
+        ...authMode,
+        secret_fields: (authMode.secret_fields ?? []).map((field) => ({ ...field, required: false })),
+        config_fields: (authMode.config_fields ?? []).map((field) => ({ ...field, required: false })),
+      },
+      rotateFields,
+    );
+    if (!Object.keys(collected.secretValue).length && !Object.keys(collected.authConfig).length) {
+      toast.push("Enter a new key or config value to rotate.", "error");
+      return;
+    }
+    setSaving(true);
+    const updated = await updateGatewaySecret(ctx, {
+      secret_id: secret.secret_id,
+      secret_value: Object.keys(collected.secretValue).length ? collected.secretValue : undefined,
+      auth_config: Object.keys(collected.authConfig).length ? collected.authConfig : undefined,
+      updated_by: me.email,
+    });
+    setSaving(false);
+    if (!updated.ok) {
+      toast.push(updated.message, "error");
+      return;
+    }
+    toast.push("Connection rotated.", "success");
+    setRotateId(null);
+    setRotateFields({});
     await refresh();
   }
 
@@ -187,19 +247,23 @@ export default function IntegrationsPage() {
       <PageHeader
         kicker="Govern"
         title="Integrations"
-        lede="LLM provider keys are stored encrypted in this workspace and used by the AI Gateway. Alert webhooks live on Alerts."
-      />
+        lede="LLM provider keys stay encrypted in this workspace. Named endpoints on Deployments use them for chat, embeddings, and traces."
+      >
+        <Link className="btn secondary" href="/deployments">
+          Open deployments
+        </Link>
+      </PageHeader>
       {error ? <div className="banner danger">{error}</div> : null}
       {defaultKek ? (
         <div className="banner warn">
-          Provider keys are encrypted with MLflow&apos;s development passphrase. Set `MLFLOW_CRYPTO_KEK_PASSPHRASE` on
+          Provider keys are encrypted with a development passphrase. Set `MLFLOW_CRYPTO_KEK_PASSPHRASE` on
           the tracking server before storing production keys.
         </div>
       ) : null}
       <section style={{ marginBottom: 24 }}>
-        <p className="kicker">AI Providers</p>
+        <p className="kicker">LLM providers</p>
         <div className="grid">
-          {FEATURED_PROVIDERS.map((provider) => {
+          {providers.map((provider) => {
             const connected = byProvider.get(provider.id) ?? [];
             return (
               <div className="card span-4" key={provider.id}>
@@ -266,10 +330,49 @@ export default function IntegrationsPage() {
                 Added {formatEpoch(secret.created_at)}
                 {secret.created_by ? ` by ${secret.created_by}` : ""}
               </p>
+              {secret.masked_values
+                ? Object.entries(secret.masked_values).map(([key, value]) => (
+                    <p className="lede mono" key={key}>
+                      {key}: {value}
+                    </p>
+                  ))
+                : null}
               {canManage ? (
-                <button type="button" className="btn ghost" onClick={() => void remove(secret)}>
-                  Disconnect
-                </button>
+                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    onClick={() => {
+                      setRotateId(secret.secret_id ?? null);
+                      setRotateFields({});
+                    }}
+                  >
+                    Rotate
+                  </button>
+                  <button type="button" className="btn ghost" onClick={() => void remove(secret)}>
+                    Disconnect
+                  </button>
+                </div>
+              ) : null}
+              {rotateId === secret.secret_id ? (
+                <form onSubmit={(event) => void rotate(event, secret)} style={{ marginTop: 12 }}>
+                  {(authMode.secret_fields ?? []).map((field) => (
+                    <FormField key={field.name} label={field.description || field.name || "Secret"} htmlFor={`rotate-${field.name}`}>
+                      <input
+                        id={`rotate-${field.name}`}
+                        type="password"
+                        autoComplete="off"
+                        value={rotateFields[field.name ?? ""] ?? ""}
+                        onChange={(event) =>
+                          setRotateFields((current) => ({ ...current, [field.name ?? ""]: event.target.value }))
+                        }
+                      />
+                    </FormField>
+                  ))}
+                  <button className="btn" type="submit" disabled={saving}>
+                    {saving ? "Saving…" : "Save new key"}
+                  </button>
+                </form>
               ) : null}
             </div>
           ))}

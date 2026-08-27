@@ -169,6 +169,15 @@ def test_mlflow_upstream_path_prefixes_protocol_not_artifacts():
     assert mlflow_upstream_path("/gateway/mlflow/v1/chat/completions", "/mlflow") == (
         "/mlflow/gateway/mlflow/v1/chat/completions"
     )
+    assert mlflow_upstream_path("/gateway/openai/v1/chat/completions", "/mlflow") == (
+        "/mlflow/gateway/openai/v1/chat/completions"
+    )
+    assert mlflow_upstream_path("/gateway/anthropic/v1/messages", "/mlflow") == (
+        "/mlflow/gateway/anthropic/v1/messages"
+    )
+    assert mlflow_upstream_path(
+        "/gateway/gemini/v1beta/models/support-chat:generateContent", "/mlflow"
+    ) == "/mlflow/gateway/gemini/v1beta/models/support-chat:generateContent"
 
 
 def test_search_and_list_rpcs_are_reads():
@@ -189,7 +198,12 @@ def test_search_and_list_rpcs_are_reads():
     assert is_mlflow_write("/ajax-api/3.0/mlflow/gateway/secrets/create", "POST") is True
     assert is_gateway_path("/gateway/chat/mlflow/invocations") is True
     assert is_gateway_path("/gateway/mlflow/v1/chat/completions") is True
+    assert is_gateway_path("/gateway/openai/v1/chat/completions") is True
+    assert is_gateway_path("/gateway/anthropic/v1/messages") is True
     assert is_gateway_path("/ajax-api/3.0/mlflow/gateway/secrets/list") is False
+    assert is_mlflow_write("/ajax-api/3.0/mlflow/gateway/budgets/list", "GET") is False
+    assert is_mlflow_write("/ajax-api/3.0/mlflow/gateway/budgets/create", "POST") is True
+    assert is_mlflow_write("/ajax-api/3.0/mlflow/gateway/guardrails/list", "GET") is False
 
 
 def test_relative_trace_artifact_path_from_tag():
