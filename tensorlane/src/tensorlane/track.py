@@ -133,6 +133,8 @@ def get_tracking_uri() -> str:
 
 
 def __getattr__(name: str) -> Any:
+    if name.startswith("_"):
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     _install_protocol_aliases()
     return getattr(_mlflow(), name)
 

@@ -540,6 +540,14 @@ def test_rebrand_visible_text_is_tensorlane():
     assert "tensorlane" in unavailable
 
 
+def test_track_module_import_does_not_require_protocol_library():
+    from tensorlane import track
+
+    assert track.URI_ENV == "TENSORLANE_TRACKING_URI"
+    assert track.API_KEY_ENV == "TENSORLANE_API_KEY"
+    assert getattr(track, "__path__", None) is None
+
+
 def test_bind_credentials_maps_tensorlane_env(monkeypatch):
     import os
 
