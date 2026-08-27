@@ -124,31 +124,13 @@ REBRAND_JS = r"""
     }
     for (var c = node.firstChild; c; c = c.nextSibling) walk(c);
   }
-  var paused = false;
-  var scheduled = false;
   function run(){
-    scheduled = false;
     if (document.title) document.title = swap(document.title);
     if (document.body) walk(document.body);
     chrome(document);
   }
-  function schedule(){
-    if (paused) return;
-    chrome(document);
-    if (scheduled) return;
-    scheduled = true;
-    requestAnimationFrame(run);
-  }
   run();
-  new MutationObserver(function(){
-    if (paused) return;
-    paused = true;
-    try { chrome(document); }
-    finally { paused = false; }
-    schedule();
-  }).observe(document.documentElement,{
-    childList:true,subtree:true
-  });
+  setInterval(run, 400);
 })();
 """.strip()
 

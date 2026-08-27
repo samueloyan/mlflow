@@ -146,35 +146,8 @@ export function injectTrackingRebrand(doc: Document): () => void {
   marked?.setAttribute("data-tensorlane-rebrand", "1");
   ensureChromeStyles(doc);
 
-  let paused = false;
-  let scheduled = false;
-  const run = () => {
-    scheduled = false;
-    paint(doc);
-  };
-  const schedule = () => {
-    if (paused) return;
-    if (scheduled) return;
-    scheduled = true;
-    const raf = doc.defaultView?.requestAnimationFrame ?? requestAnimationFrame;
-    raf.call(doc.defaultView ?? window, run);
-  };
-
   paint(doc);
-  const observer = new MutationObserver(() => {
-    if (paused) return;
-    paused = true;
-    try {
-      maskLogos(doc);
-      hideVendorMedia(doc);
-    } finally {
-      paused = false;
-    }
-    schedule();
-  });
-  observer.observe(doc.documentElement, {
-    childList: true,
-    subtree: true,
-  });
-  return () => observer.disconnect();
+  const view = doc.defaultView ?? window;
+  const timer = view.setInterval(() => paint(doc), 400);
+  return () => view.clearInterval(timer);
 }
