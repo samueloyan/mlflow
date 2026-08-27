@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { PageHeader } from "@/components/PageHeader";
+import { EmptyState, PageHeader } from "@/components/PageHeader";
 import { CodeBlock } from "@/components/ui/CodeBlock";
 import { ErrorState } from "@/components/ui/EmptyState";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -23,17 +23,21 @@ export default function ApiKeysPage() {
   const [secret, setSecret] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const tracking = usePublicTrackingUri();
   const canCreate = canManageKeys(role);
 
   async function refresh() {
     if (!organization) return;
+    setLoading(true);
     try {
       setKeys(await api<ApiKey[]>(`/api/v1/api-keys?organization_id=${organization.id}`));
       setLoadError(null);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : "Could not load API keys.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -99,10 +103,17 @@ export default function ApiKeysPage() {
           </p>
         </div>
       ) : null}
+      {message ? <div className="banner danger">{message}</div> : null}
       {loadError ? (
         <ErrorState title="Unable to load API keys" body={loadError} onRetry={() => void refresh()} />
-      ) : null}
-      {message ? <div className="banner danger">{message}</div> : null}
+      ) : loading ? (
+        <p className="lede">Loading API keys…</p>
+      ) : keys.length === 0 ? (
+        <EmptyState
+          title="No API keys yet"
+          body="Create a workspace-scoped key for the SDK. Secrets are shown once."
+        />
+      ) : (
       <div className="card">
         <table className="data">
           <thead>
@@ -139,6 +150,7 @@ export default function ApiKeysPage() {
           </tbody>
         </table>
       </div>
+      )}
       {creating ? (
         <Modal
           title="Create API key"

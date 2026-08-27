@@ -23,6 +23,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [planeWarning, setPlaneWarning] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const [navOpen, setNavOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -62,6 +63,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           if (cancelled) return;
           setMe({ ...profile, name: profile.name || sessionMe.name, email: profile.email || sessionMe.email });
           setOrganizations(orgs);
+          setPlaneWarning(null);
           if (orgs.length === 0) {
             if (pathname !== "/onboarding") {
               router.replace("/onboarding");
@@ -71,8 +73,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
           const stored = window.localStorage.getItem("tensorlane.org");
           const nextOrg = orgs.find((org) => org.id === stored)?.id ?? orgs[0]?.id ?? null;
           setOrganizationId(nextOrg);
-        } catch {
-          // Dashboard auth is local; the control plane/gateway is optional until it is deployed.
+        } catch (err) {
+          if (!cancelled) {
+            setPlaneWarning(
+              err instanceof Error ? err.message : "Unable to reach the Tensorlane control plane.",
+            );
+          }
         }
       } catch (err) {
         if (!cancelled) {
@@ -194,6 +200,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           />
           <div className="main-col">
             <Header onSearch={() => setPaletteOpen(true)} />
+            {planeWarning ? <div className="banner danger">{planeWarning}</div> : null}
             {organization ? <UsageBanner /> : null}
             <main id="main">{children}</main>
           </div>
