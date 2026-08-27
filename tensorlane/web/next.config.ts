@@ -8,7 +8,10 @@ const nextConfig: NextConfig = {
   ...(process.env.VERCEL ? {} : { output: "standalone" as const }),
   allowedDevOrigins: ["127.0.0.1", "localhost"],
   serverExternalPackages: ["better-sqlite3", "pg"],
-    async rewrites() {
+  // The tracking workbench is served at /mlflow/. Next's default redirect to
+  // /mlflow 308s the iframe and breaks relative static-file URLs.
+  skipTrailingSlashRedirect: true,
+  async rewrites() {
     if (!apiOrigin) {
       return [];
     }

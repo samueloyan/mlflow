@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { CodeBlock } from "@/components/ui/CodeBlock";
+import { ErrorState } from "@/components/ui/EmptyState";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { api, type ApiKey, type CreatedApiKey } from "@/lib/api";
 import { formatDate } from "@/lib/format";
@@ -21,13 +22,19 @@ export default function ApiKeysPage() {
   const [workspaceId, setWorkspaceId] = useState<string>("");
   const [secret, setSecret] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const tracking = usePublicTrackingUri();
   const canCreate = canManageKeys(role);
 
   async function refresh() {
     if (!organization) return;
-    setKeys(await api<ApiKey[]>(`/api/v1/api-keys?organization_id=${organization.id}`));
+    try {
+      setKeys(await api<ApiKey[]>(`/api/v1/api-keys?organization_id=${organization.id}`));
+      setLoadError(null);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Could not load API keys.");
+    }
   }
 
   useEffect(() => {
@@ -91,6 +98,9 @@ export default function ApiKeysPage() {
             {`export MLFLOW_TRACKING_TOKEN=tl_live_xxxxx`}
           </p>
         </div>
+      ) : null}
+      {loadError ? (
+        <ErrorState title="Unable to load API keys" body={loadError} onRetry={() => void refresh()} />
       ) : null}
       {message ? <div className="banner danger">{message}</div> : null}
       <div className="card">

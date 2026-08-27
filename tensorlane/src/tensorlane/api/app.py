@@ -233,7 +233,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     @app.get("/health")
-    def health() -> dict[str, str]:
+    async def health() -> dict[str, str]:
+        # Liveness only. Keep this async and off the DB so Fly health checks
+        # cannot queue behind Neon or a saturated sync threadpool.
         return {"status": "ok", "service": "tensorlane"}
 
     @app.get("/ready")

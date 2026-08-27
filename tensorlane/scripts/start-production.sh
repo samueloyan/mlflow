@@ -65,7 +65,7 @@ MLFLOW_ARGS=(
   --x-frame-options SAMEORIGIN
   --host 127.0.0.1
   --port "${MLFLOW_PORT}"
-  --workers 1
+  --workers 2
 )
 # Clients must receive mlflow-artifacts:/ so uploads go through the tracking
 # server. A file:// or s3:// default-artifact-root makes the SDK write locally

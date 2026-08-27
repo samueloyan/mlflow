@@ -165,14 +165,20 @@ export class ApiError extends Error {
 }
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
-    ...init,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      ...init,
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {}),
+      },
+      signal: init?.signal ?? AbortSignal.timeout(30_000),
+    });
+  } catch {
+    throw new ApiError(0, "The control plane did not respond.", "TIMEOUT");
+  }
   if (response.status === 204) {
     return undefined as T;
   }

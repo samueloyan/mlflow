@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { EmptyState, PageHeader } from "@/components/PageHeader";
+import { ErrorState } from "@/components/ui/EmptyState";
 import { api, type Organization, type Plan } from "@/lib/api";
 import { formatCount, formatUsd } from "@/lib/format";
 import { useShell } from "@/lib/shell";
@@ -13,11 +14,21 @@ function BillingInner() {
   const search = useSearchParams();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [message, setMessage] = useState<string | null>(null);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const canManage = role === "owner" || role === "billing";
 
+  function loadPlans() {
+    setCatalogError(null);
+    void api<{ plans: Plan[] }>("/api/v1/plans")
+      .then((payload) => setPlans(payload.plans))
+      .catch((err) =>
+        setCatalogError(err instanceof Error ? err.message : "Could not load plans."),
+      );
+  }
+
   useEffect(() => {
-    void api<{ plans: Plan[] }>("/api/v1/plans").then((payload) => setPlans(payload.plans));
+    loadPlans();
   }, []);
 
   useEffect(() => {
@@ -122,9 +133,16 @@ function BillingInner() {
             ) : null}
           </div>
         ))}
-        {plans.length === 0 ? (
+        {catalogError ? (
           <div className="span-12">
-            <EmptyState title="Plans unavailable" body="The control plane could not load the catalog." />
+            <ErrorState title="Unable to load plans" body={catalogError} onRetry={loadPlans} />
+          </div>
+        ) : plans.length === 0 ? (
+          <div className="span-12">
+            <EmptyState
+              title="Plans unavailable"
+              body="Billing catalog is not configured in this environment. Stripe is optional until you connect it."
+            />
           </div>
         ) : null}
       </div>

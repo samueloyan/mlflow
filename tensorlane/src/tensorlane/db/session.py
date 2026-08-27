@@ -36,6 +36,10 @@ def create_engine_from_settings(settings: Settings) -> Engine:
     else:
         kwargs["pool_pre_ping"] = True
         kwargs["pool_recycle"] = 300
+        kwargs["pool_timeout"] = 10
+        kwargs["pool_size"] = 5
+        kwargs["max_overflow"] = 10
+        connect_args["connect_timeout"] = 5
     kwargs["connect_args"] = connect_args
     return create_engine(sqlalchemy_database_url(settings.database_url), **kwargs)
 

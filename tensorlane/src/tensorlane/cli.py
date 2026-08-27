@@ -67,6 +67,7 @@ def _worker(args: argparse.Namespace) -> None:
     configure_session(settings)
     create_schema()
     log.info("worker_started poll=%.1fs", args.interval)
+    delay = args.interval
     while True:
         session = session_factory()()
         job = None
@@ -75,13 +76,15 @@ def _worker(args: argparse.Namespace) -> None:
             if job is None:
                 schedule_maintenance(session)
             session.commit()
+            delay = args.interval
         except Exception:
             session.rollback()
             log.exception("worker_loop_failed")
+            delay = min(60.0, max(delay, args.interval) * 2)
         finally:
             session.close()
         if job is None:
-            time.sleep(args.interval)
+            time.sleep(delay)
 
 
 def _orgs(_: argparse.Namespace) -> None:

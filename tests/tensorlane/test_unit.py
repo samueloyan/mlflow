@@ -175,9 +175,12 @@ def test_mlflow_upstream_path_prefixes_protocol_not_artifacts():
     assert mlflow_upstream_path("/gateway/anthropic/v1/messages", "/mlflow") == (
         "/mlflow/gateway/anthropic/v1/messages"
     )
-    assert mlflow_upstream_path(
-        "/gateway/gemini/v1beta/models/support-chat:generateContent", "/mlflow"
-    ) == "/mlflow/gateway/gemini/v1beta/models/support-chat:generateContent"
+    assert (
+        mlflow_upstream_path(
+            "/gateway/gemini/v1beta/models/support-chat:generateContent", "/mlflow"
+        )
+        == "/mlflow/gateway/gemini/v1beta/models/support-chat:generateContent"
+    )
 
 
 def test_search_and_list_rpcs_are_reads():
@@ -294,6 +297,51 @@ def test_sqlalchemy_database_url_uses_psycopg():
     assert sqlalchemy_database_url("postgresql+psycopg2://u:p@h/db") == (
         "postgresql+psycopg2://u:p@h/db"
     )
+
+
+def test_postgres_engine_times_out_hung_connections(monkeypatch):
+    captured: dict[str, object] = {}
+
+    def fake_create_engine(url, **kwargs):
+        captured["url"] = url
+        captured["kwargs"] = kwargs
+        return object()
+
+    monkeypatch.setattr("tensorlane.db.session.create_engine", fake_create_engine)
+    from tensorlane.config import Settings
+    from tensorlane.db.session import create_engine_from_settings
+
+    create_engine_from_settings(Settings(database_url="postgresql://u:p@h/db"))
+    kwargs = captured["kwargs"]
+    assert kwargs["pool_pre_ping"] is True
+    assert kwargs["pool_recycle"] == 300
+    assert kwargs["pool_timeout"] == 10
+    assert kwargs["connect_args"]["connect_timeout"] == 5
+    assert captured["url"] == "postgresql+psycopg://u:p@h/db"
+
+
+def test_health_is_async_liveness(tmp_path):
+    import inspect
+
+    from fastapi.testclient import TestClient
+    from tensorlane.api.app import create_app
+    from tensorlane.config import Settings
+
+    settings = Settings(
+        database_url=f"sqlite:///{tmp_path}/tensorlane.db",
+        mlflow_internal_uri="http://127.0.0.1:9",
+        tensorlane_pepper="test-pepper",
+        web_origin="http://testserver",
+        public_url="http://testserver",
+        control_plane_rpm=0,
+        mlflow_write_rpm=0,
+        trace_ingest_rpm=0,
+    )
+    app = create_app(settings)
+    health = next(route for route in app.routes if getattr(route, "path", None) == "/health")
+    assert inspect.iscoroutinefunction(health.endpoint)
+    with TestClient(app) as client:
+        assert client.get("/health").json() == {"status": "ok", "service": "tensorlane"}
 
 
 def test_boot_sync_does_not_crash_when_mlflow_is_down(tmp_path):
