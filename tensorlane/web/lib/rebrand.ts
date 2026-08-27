@@ -50,11 +50,12 @@ function isLogo(svg: Element): boolean {
   return (svg.innerHTML || "").includes("31.0316");
 }
 
-function hideEl(el: HTMLElement): void {
-  el.style.setProperty("display", "none", "important");
-  el.style.setProperty("visibility", "hidden", "important");
-  el.style.setProperty("width", "0", "important");
-  el.style.setProperty("height", "0", "important");
+function hideEl(el: Element): void {
+  const style = (el as HTMLElement | SVGElement).style;
+  style.setProperty("display", "none", "important");
+  style.setProperty("visibility", "hidden", "important");
+  style.setProperty("width", "0", "important");
+  style.setProperty("height", "0", "important");
   el.setAttribute("hidden", "");
   el.setAttribute("aria-hidden", "true");
 }
@@ -62,7 +63,7 @@ function hideEl(el: HTMLElement): void {
 function maskLogos(root: ParentNode): void {
   root.querySelectorAll("svg").forEach((svg) => {
     if (!isLogo(svg)) return;
-    hideEl(svg as HTMLElement);
+    hideEl(svg);
     while (svg.firstChild) svg.removeChild(svg.firstChild);
     const parent = svg.parentElement;
     if (!parent) return;
@@ -78,7 +79,7 @@ function hideVendorMedia(root: ParentNode): void {
   root.querySelectorAll("a[href],img[src]").forEach((el) => {
     const url = el.getAttribute("href") || el.getAttribute("src") || "";
     if (!vendorUrl(url)) return;
-    hideEl(el as HTMLElement);
+    hideEl(el);
     if (el.hasAttribute("href")) el.removeAttribute("href");
   });
 }
