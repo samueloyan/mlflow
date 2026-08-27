@@ -9,7 +9,7 @@ import { injectTrackingRebrand } from "@/lib/rebrand";
 function TrackingFrame() {
   const searchParams = useSearchParams();
   const hash = (searchParams.get("hash") ?? "").replace(/^#/, "");
-  const src = hash ? `/mlflow/#${hash}` : "/mlflow/";
+  const src = hash ? `/workbench/#${hash}` : "/workbench/";
   const frameRef = useRef<HTMLIFrameElement>(null);
   const stopRef = useRef<(() => void) | undefined>(undefined);
 

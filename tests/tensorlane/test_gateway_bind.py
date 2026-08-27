@@ -247,6 +247,8 @@ def test_session_workspace_cookie_binds_iframe_when_org_has_two_workspaces(tmp_p
         assert allowed.status_code == 200, allowed.text
         assert b"<title>Tensorlane</title>" in allowed.content
         assert b'data-tensorlane-rebrand="1"' in allowed.content
+        assert b'data-tensorlane-rebrand-css="1"' in allowed.content
+        assert b'svg[viewBox="0 0 109 40"]' in allowed.content
         assert captured["workspace"] == production.mlflow_workspace_name
     finally:
         server.should_exit = True

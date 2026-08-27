@@ -7,6 +7,7 @@ const GATEWAY_PREFIXES = [
   "/api/2.0",
   "/api/3.0",
   "/ajax-api",
+  "/workbench",
   "/mlflow",
   "/mlflow-artifacts",
   "/v1/traces",

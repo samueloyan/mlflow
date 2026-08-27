@@ -8,8 +8,9 @@ const nextConfig: NextConfig = {
   ...(process.env.VERCEL ? {} : { output: "standalone" as const }),
   allowedDevOrigins: ["127.0.0.1", "localhost"],
   serverExternalPackages: ["better-sqlite3", "pg"],
-  // The tracking workbench is served at /mlflow/. Next's default redirect to
-  // /mlflow 308s the iframe and breaks relative static-file URLs.
+  // Dashboard iframe loads /workbench/ (rewritten to the tracking UI). Protocol
+  // clients still use /mlflow/. skipTrailingSlashRedirect avoids a 308 that
+  // breaks relative static-file URLs.
   skipTrailingSlashRedirect: true,
   async rewrites() {
     if (!apiOrigin) {
@@ -17,6 +18,9 @@ const nextConfig: NextConfig = {
     }
     return [
       { source: "/api/v1/:path*", destination: `${apiOrigin}/api/v1/:path*` },
+      { source: "/workbench", destination: `${apiOrigin}/mlflow/` },
+      { source: "/workbench/", destination: `${apiOrigin}/mlflow/` },
+      { source: "/workbench/:path*", destination: `${apiOrigin}/mlflow/:path*` },
       { source: "/mlflow", destination: `${apiOrigin}/mlflow/` },
       { source: "/mlflow/", destination: `${apiOrigin}/mlflow/` },
       { source: "/mlflow/:path*", destination: `${apiOrigin}/mlflow/:path*` },

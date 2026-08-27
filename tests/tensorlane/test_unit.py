@@ -519,6 +519,8 @@ def test_create_workspace_treats_already_exists_and_patches_root(monkeypatch):
 
 def test_rebrand_visible_text_is_tensorlane():
     from tensorlane.branding import (
+        REBRAND_CSS,
+        REBRAND_JS,
         inject_tracking_rebrand,
         rebrand_visible_text,
         tracking_unavailable_html,
@@ -530,11 +532,17 @@ def test_rebrand_visible_text_is_tensorlane():
         "export MLFLOW_TRACKING_TOKEN=secret"
     )
     assert "TENSORLANE_API_KEY" in rebrand_visible_text("export MLFLOW_TRACKING_TOKEN=secret")
+    assert "</script>" not in REBRAND_JS
+    assert "</style>" not in REBRAND_CSS
     html = inject_tracking_rebrand(
         "<html><head><title>MLflow</title></head><body>Welcome to MLflow</body></html>"
     ).decode("utf-8")
     assert "<title>Tensorlane</title>" in html
     assert 'data-tensorlane-rebrand="1"' in html
+    assert 'data-tensorlane-rebrand-css="1"' in html
+    assert 'svg[viewBox="0 0 109 40"]' in html
+    assert 'content:"tensorlane"' in html
+    assert "tensorlane-wordmark" in html
     unavailable = tracking_unavailable_html().lower()
     assert "mlflow" not in unavailable
     assert "tensorlane" in unavailable

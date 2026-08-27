@@ -11,6 +11,19 @@ const PHRASE_REPLACEMENTS: readonly [string, string][] = [
 
 const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "IFRAME"]);
 const ATTRS = ["title", "aria-label", "alt", "placeholder", "aria-description"] as const;
+const LOGO_SELECTOR = 'svg[viewBox="0 0 109 40"],svg[width="109"][height="40"]';
+
+export const REBRAND_CSS = `
+svg[viewBox="0 0 109 40"],svg[width="109"][height="40"]{display:none!important}
+a:has(svg[viewBox="0 0 109 40"])::after,a:has(svg[width="109"][height="40"])::after{
+  content:"tensorlane";display:block;font:500 17px/24px Georgia,Times New Roman,serif;
+  letter-spacing:.04em;color:inherit
+}
+.tensorlane-wordmark{display:block;font:500 17px/24px Georgia,Times New Roman,serif;
+  letter-spacing:.04em;color:inherit}
+a[href*="mlflow.org" i]{display:none!important}
+img[src*="mlflow.org" i],img[src*="MLflow-logo" i]{display:none!important}
+`.trim();
 
 export function rebrandVisibleText(value: string): string {
   let out = value;
@@ -22,6 +35,38 @@ export function rebrandVisibleText(value: string): string {
     .replace(/Mlflow/g, "Tensorlane")
     .replace(/MLFLOW/g, "TENSORLANE")
     .replace(/mlflow/g, "tensorlane");
+}
+
+function vendorUrl(value: string | null): boolean {
+  return /mlflow\.org/i.test(value ?? "");
+}
+
+function createIn(root: ParentNode, tag: string): HTMLElement {
+  const doc = root instanceof Document ? root : (root.ownerDocument ?? document);
+  return doc.createElement(tag);
+}
+
+function maskLogos(root: ParentNode): void {
+  const svgs = root.querySelectorAll(LOGO_SELECTOR);
+  svgs.forEach((svg) => {
+    const parent = svg.parentElement;
+    if (!parent || parent.tagName === "A") return;
+    if (parent.querySelector(".tensorlane-wordmark")) return;
+    const mark = createIn(root, "span");
+    mark.className = "tensorlane-wordmark";
+    mark.textContent = "tensorlane";
+    parent.insertBefore(mark, svg);
+  });
+}
+
+function hideVendorMedia(root: ParentNode): void {
+  root.querySelectorAll("a[href],img[src]").forEach((el) => {
+    const url = el.getAttribute("href") || el.getAttribute("src") || "";
+    if (!vendorUrl(url)) return;
+    el.setAttribute("hidden", "");
+    el.setAttribute("aria-hidden", "true");
+    if (el.hasAttribute("href")) el.removeAttribute("href");
+  });
 }
 
 function walk(node: Node): void {
@@ -47,18 +92,30 @@ function walk(node: Node): void {
   }
 }
 
+function ensureChromeStyles(doc: Document): void {
+  if (doc.getElementById("tensorlane-rebrand-css")) return;
+  const style = doc.createElement("style");
+  style.id = "tensorlane-rebrand-css";
+  style.textContent = REBRAND_CSS;
+  (doc.head ?? doc.documentElement).appendChild(style);
+}
+
 export function injectTrackingRebrand(doc: Document): () => void {
   const marked = doc.documentElement;
   if (marked?.getAttribute("data-tensorlane-rebrand") === "1") {
+    ensureChromeStyles(doc);
     return () => undefined;
   }
   marked?.setAttribute("data-tensorlane-rebrand", "1");
+  ensureChromeStyles(doc);
 
   let scheduled = false;
   const run = () => {
     scheduled = false;
     if (doc.title) doc.title = rebrandVisibleText(doc.title);
     if (doc.body) walk(doc.body);
+    maskLogos(doc);
+    hideVendorMedia(doc);
   };
   const schedule = () => {
     if (scheduled) return;
@@ -74,7 +131,7 @@ export function injectTrackingRebrand(doc: Document): () => void {
     subtree: true,
     characterData: true,
     attributes: true,
-    attributeFilter: [...ATTRS],
+    attributeFilter: [...ATTRS, "href", "src"],
   });
   return () => observer.disconnect();
 }

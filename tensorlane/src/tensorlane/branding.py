@@ -17,6 +17,20 @@ _PHRASE_REPLACEMENTS: tuple[tuple[str, str], ...] = (
 
 _TITLE_RE = re.compile(r"(<title\b[^>]*>)(.*?)(</title>)", re.IGNORECASE | re.DOTALL)
 
+# Hide the protocol wordmark SVG (letterforms, not text) and vendor docs links.
+# Do not include the substring "</style>".
+REBRAND_CSS = """
+svg[viewBox="0 0 109 40"],svg[width="109"][height="40"]{display:none!important}
+a:has(svg[viewBox="0 0 109 40"])::after,a:has(svg[width="109"][height="40"])::after{
+  content:"tensorlane";display:block;font:500 17px/24px Georgia,Times New Roman,serif;
+  letter-spacing:.04em;color:inherit
+}
+.tensorlane-wordmark{display:block;font:500 17px/24px Georgia,Times New Roman,serif;
+  letter-spacing:.04em;color:inherit}
+a[href*="mlflow.org" i]{display:none!important}
+img[src*="mlflow.org" i],img[src*="MLflow-logo" i]{display:none!important}
+""".strip()
+
 # Runs in the tracking workbench. Do not include the substring "</script>".
 REBRAND_JS = r"""
 (function(){
@@ -40,6 +54,32 @@ REBRAND_JS = r"""
   function skip(el){
     var tag = el && el.nodeName;
     return tag === "SCRIPT" || tag === "STYLE" || tag === "NOSCRIPT" || tag === "IFRAME";
+  }
+  function vendorUrl(v){
+    return /mlflow\.org/i.test(v || "");
+  }
+  function chrome(root){
+    if (!root || !root.querySelectorAll) return;
+    var svgs = root.querySelectorAll('svg[viewBox="0 0 109 40"],svg[width="109"][height="40"]');
+    for (var i = 0; i < svgs.length; i++){
+      var svg = svgs[i];
+      var parent = svg.parentNode;
+      if (!parent || parent.nodeName === "A") continue;
+      if (parent.querySelector && parent.querySelector(".tensorlane-wordmark")) continue;
+      var mark = document.createElement("span");
+      mark.className = "tensorlane-wordmark";
+      mark.textContent = "tensorlane";
+      parent.insertBefore(mark, svg);
+    }
+    var media = root.querySelectorAll("a[href],img[src]");
+    for (var j = 0; j < media.length; j++){
+      var el = media[j];
+      var url = el.getAttribute("href") || el.getAttribute("src") || "";
+      if (!vendorUrl(url)) continue;
+      el.setAttribute("hidden", "");
+      el.setAttribute("aria-hidden", "true");
+      if (el.hasAttribute("href")) el.removeAttribute("href");
+    }
   }
   function walk(node){
     if (!node) return;
@@ -65,6 +105,7 @@ REBRAND_JS = r"""
     scheduled = false;
     if (document.title) document.title = swap(document.title);
     if (document.body) walk(document.body);
+    chrome(document);
   }
   function schedule(){
     if (scheduled) return;
@@ -74,12 +115,19 @@ REBRAND_JS = r"""
   run();
   new MutationObserver(schedule).observe(document.documentElement,{
     childList:true,subtree:true,characterData:true,attributes:true,
-    attributeFilter:["title","aria-label","alt","placeholder","aria-description"]
+    attributeFilter:["title","aria-label","alt","placeholder","aria-description","href","src"]
   });
 })();
 """.strip()
 
-_SCRIPT_TAG = '<script data-tensorlane-rebrand="1">' + REBRAND_JS + "</script>"
+_CHROME_TAG = (
+    '<style data-tensorlane-rebrand-css="1">'
+    + REBRAND_CSS
+    + "</style>"
+    + '<script data-tensorlane-rebrand="1">'
+    + REBRAND_JS
+    + "</script>"
+)
 
 
 def rebrand_visible_text(value: str) -> str:
@@ -109,7 +157,7 @@ def tracking_unavailable_html() -> str:
 
 
 def inject_tracking_rebrand(html: bytes | str) -> bytes:
-    """Rewrite the tracking UI shell title and inject a client rebrand script."""
+    """Rewrite tracking UI chrome: Tensorlane title, wordmark, and copy."""
     text = html.decode("utf-8", errors="replace") if isinstance(html, (bytes, bytearray)) else html
     if "data-tensorlane-rebrand" in text:
         return text.encode("utf-8")
@@ -121,16 +169,16 @@ def inject_tracking_rebrand(html: bytes | str) -> bytes:
     lowered = text.lower()
     if "</head>" in lowered:
         idx = lowered.rfind("</head>")
-        text = text[:idx] + _SCRIPT_TAG + text[idx:]
+        text = text[:idx] + _CHROME_TAG + text[idx:]
     elif "<body" in lowered:
         match = re.search(r"<body[^>]*>", text, flags=re.IGNORECASE)
         if match:
             insert_at = match.end()
-            text = text[:insert_at] + _SCRIPT_TAG + text[insert_at:]
+            text = text[:insert_at] + _CHROME_TAG + text[insert_at:]
         else:
-            text = _SCRIPT_TAG + text
+            text = _CHROME_TAG + text
     else:
-        text = _SCRIPT_TAG + text
+        text = _CHROME_TAG + text
     return text.encode("utf-8")
 
 
