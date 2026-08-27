@@ -181,6 +181,23 @@ def test_mlflow_upstream_path_prefixes_protocol_not_artifacts():
         )
         == "/mlflow/gateway/gemini/v1beta/models/support-chat:generateContent"
     )
+    assert mlflow_upstream_path("/gateway/chat/invocations", "/mlflow") == (
+        "/mlflow/gateway/chat/mlflow/invocations"
+    )
+    assert mlflow_upstream_path("/gateway/v1/chat/completions", "/mlflow") == (
+        "/mlflow/gateway/mlflow/v1/chat/completions"
+    )
+    from tensorlane.mlflow_paths import tensorlane_gateway_path
+
+    assert tensorlane_gateway_path("/gateway/demo/invocations") == (
+        "/gateway/demo/mlflow/invocations"
+    )
+    assert tensorlane_gateway_path("/gateway/demo/mlflow/invocations") == (
+        "/gateway/demo/mlflow/invocations"
+    )
+    assert tensorlane_gateway_path("/gateway/openai/v1/chat/completions") == (
+        "/gateway/openai/v1/chat/completions"
+    )
 
 
 def test_search_and_list_rpcs_are_reads():
@@ -203,6 +220,9 @@ def test_search_and_list_rpcs_are_reads():
     assert is_gateway_path("/gateway/mlflow/v1/chat/completions") is True
     assert is_gateway_path("/gateway/openai/v1/chat/completions") is True
     assert is_gateway_path("/gateway/anthropic/v1/messages") is True
+    assert is_gateway_path("/gateway/chat/invocations") is True
+    assert is_gateway_path("/gateway/v1/chat/completions") is True
+    assert is_mlflow_write("/gateway/chat/invocations", "POST") is True
     assert is_gateway_path("/ajax-api/3.0/mlflow/gateway/secrets/list") is False
     assert is_mlflow_write("/ajax-api/3.0/mlflow/gateway/budgets/list", "GET") is False
     assert is_mlflow_write("/ajax-api/3.0/mlflow/gateway/budgets/create", "POST") is True
@@ -495,3 +515,47 @@ def test_create_workspace_treats_already_exists_and_patches_root(monkeypatch):
     assert calls[1][0] == "PATCH"
     assert calls[1][1].endswith("/api/3.0/mlflow/workspaces/ws-abc")
     assert calls[1][2] == {"default_artifact_root": "file:///var/mlflow/artifacts/org/x"}
+
+
+def test_rebrand_visible_text_is_tensorlane():
+    from tensorlane.branding import (
+        inject_tracking_rebrand,
+        rebrand_visible_text,
+        tracking_unavailable_html,
+    )
+
+    assert "MLflow" not in rebrand_visible_text("Welcome to MLflow")
+    assert rebrand_visible_text("Welcome to MLflow") == "Welcome to Tensorlane"
+    assert "MLFLOW_TRACKING_TOKEN" not in rebrand_visible_text(
+        "export MLFLOW_TRACKING_TOKEN=secret"
+    )
+    assert "TENSORLANE_API_KEY" in rebrand_visible_text("export MLFLOW_TRACKING_TOKEN=secret")
+    html = inject_tracking_rebrand(
+        "<html><head><title>MLflow</title></head><body>Welcome to MLflow</body></html>"
+    ).decode("utf-8")
+    assert "<title>Tensorlane</title>" in html
+    assert 'data-tensorlane-rebrand="1"' in html
+    unavailable = tracking_unavailable_html().lower()
+    assert "mlflow" not in unavailable
+    assert "tensorlane" in unavailable
+
+
+def test_bind_credentials_maps_tensorlane_env(monkeypatch):
+    import os
+
+    from tensorlane.track import API_KEY_ENV, URI_ENV, bind_credentials
+
+    monkeypatch.delenv("MLFLOW_TRACKING_URI", raising=False)
+    monkeypatch.delenv("MLFLOW_TRACKING_TOKEN", raising=False)
+    monkeypatch.delenv(URI_ENV, raising=False)
+    monkeypatch.delenv(API_KEY_ENV, raising=False)
+    uri, key = bind_credentials(
+        tracking_uri="https://tensorla.vercel.app",
+        api_key="tl_live_test",
+    )
+    assert uri == "https://tensorla.vercel.app"
+    assert key == "tl_live_test"
+    assert os.environ["MLFLOW_TRACKING_URI"] == "https://tensorla.vercel.app"
+    assert os.environ["MLFLOW_TRACKING_TOKEN"] == "tl_live_test"
+    assert os.environ[URI_ENV] == uri
+    assert os.environ[API_KEY_ENV] == key

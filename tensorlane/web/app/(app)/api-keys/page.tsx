@@ -97,9 +97,9 @@ export default function ApiKeysPage() {
           Copy this key now. It cannot be recovered.
           <CodeBlock value={secret} label="Copy secret" />
           <p className="lede">
-            {`export MLFLOW_TRACKING_URI=${tracking}`}
+            {`export TENSORLANE_TRACKING_URI=${tracking}`}
             <br />
-            {`export MLFLOW_TRACKING_TOKEN=tl_live_xxxxx`}
+            {`export TENSORLANE_API_KEY=tl_live_xxxxx`}
           </p>
         </div>
       ) : null}

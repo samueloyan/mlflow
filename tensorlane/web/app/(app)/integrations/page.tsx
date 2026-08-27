@@ -257,8 +257,8 @@ export default function IntegrationsPage() {
       {error ? <div className="banner danger">{error}</div> : null}
       {defaultKek ? (
         <div className="banner warn">
-          Provider keys are encrypted with a development passphrase. Set `MLFLOW_CRYPTO_KEK_PASSPHRASE` on
-          the tracking server before storing production keys.
+          Provider keys are encrypted with a development passphrase. Set a production
+          encryption key on the tracking host before storing live provider credentials.
         </div>
       ) : null}
       <section style={{ marginBottom: 24 }}>

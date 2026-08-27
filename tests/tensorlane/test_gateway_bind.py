@@ -200,7 +200,9 @@ def test_session_workspace_cookie_binds_iframe_when_org_has_two_workspaces(tmp_p
     async def workbench(request: Request) -> HTMLResponse:
         captured["path"] = request.url.path
         captured["workspace"] = request.headers.get("x-mlflow-workspace")
-        return HTMLResponse("<html>workbench</html>")
+        return HTMLResponse(
+            "<html><head><title>MLflow</title></head><body>Welcome to MLflow</body></html>"
+        )
 
     starlette_app = Starlette(routes=[Route("/mlflow/", workbench, methods=["GET"])])
     config = uvicorn.Config(starlette_app, host="127.0.0.1", port=port, log_level="error")
@@ -243,7 +245,8 @@ def test_session_workspace_cookie_binds_iframe_when_org_has_two_workspaces(tmp_p
             allowed = client.get("/mlflow/", headers={"Authorization": "Bearer alice-session"})
             db.close()
         assert allowed.status_code == 200, allowed.text
-        assert b"workbench" in allowed.content
+        assert b"<title>Tensorlane</title>" in allowed.content
+        assert b'data-tensorlane-rebrand="1"' in allowed.content
         assert captured["workspace"] == production.mlflow_workspace_name
     finally:
         server.should_exit = True
@@ -382,5 +385,67 @@ def test_gateway_prefixes_openai_compatible_chat(tmp_path):
             db.close()
         assert invoked.status_code == 200, invoked.text
         assert captured["path"] == "/mlflow/gateway/openai/v1/chat/completions"
+    finally:
+        server.should_exit = True
+
+
+def test_gateway_aliases_tensorlane_invoke_path(tmp_path):
+    captured.clear()
+    port = _free_port()
+
+    async def invoke(request: Request) -> JSONResponse:
+        captured["path"] = request.url.path
+        return JSONResponse({"choices": [{"message": {"content": "ok"}}]})
+
+    starlette_app = Starlette(
+        routes=[
+            Route(
+                "/mlflow/gateway/demo/mlflow/invocations",
+                invoke,
+                methods=["POST"],
+            )
+        ]
+    )
+    config = uvicorn.Config(starlette_app, host="127.0.0.1", port=port, log_level="error")
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    _wait_for_port(port)
+    try:
+        settings = Settings(
+            database_url=f"sqlite:///{tmp_path}/tensorlane.db",
+            mlflow_internal_uri=f"http://127.0.0.1:{port}",
+            mlflow_static_prefix="/mlflow",
+            tensorlane_pepper="test-pepper",
+            artifact_root="file:///tmp/tensorlane-artifacts",
+            control_plane_rpm=0,
+            mlflow_write_rpm=0,
+        )
+        app = create_app(settings)
+        with TestClient(app) as client:
+            db = session_factory()()
+            alice = create_user(db, "alice@acme.test", "Alice")
+            create_session_token(db, alice, "alice-session")
+            acme, workspace = create_org_with_owner(db, alice, "Acme")
+            db.commit()
+            created = client.post(
+                "/api/v1/api-keys",
+                json={
+                    "name": "ci",
+                    "organization_id": acme.id,
+                    "workspace_id": workspace.id,
+                    "live": True,
+                },
+                headers={"Authorization": "Bearer alice-session"},
+            )
+            assert created.status_code == 201, created.text
+            invoked = client.post(
+                "/gateway/demo/invocations",
+                json={"messages": [{"role": "user", "content": "hello"}]},
+                headers={"Authorization": f"Bearer {created.json()['secret']}"},
+            )
+            db.close()
+        assert invoked.status_code == 200, invoked.text
+        assert captured["path"] == "/mlflow/gateway/demo/mlflow/invocations"
     finally:
         server.should_exit = True

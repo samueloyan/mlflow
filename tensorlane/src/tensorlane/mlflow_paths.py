@@ -31,7 +31,42 @@ def normalize_static_prefix(static_prefix: str | None) -> str:
     return prefix.rstrip("/")
 
 
+_PROVIDER_GATEWAY_PREFIXES = (
+    "/gateway/openai/",
+    "/gateway/anthropic/",
+    "/gateway/gemini/",
+    "/gateway/mlflow/",
+)
+
+
+def tensorlane_gateway_path(path: str) -> str:
+    """Map Tensorlane-public gateway URLs onto protocol paths the data plane expects.
+
+    Dashboard snippets use ``/gateway/{endpoint}/invocations`` and
+    ``/gateway/v1/chat/completions``. The tracking server still serves
+    ``.../mlflow/invocations`` and ``/gateway/mlflow/v1/...``.
+    """
+    if not path.startswith("/"):
+        path = "/" + path
+    route, sep, query = path.partition("?")
+    lowered = route.lower()
+    if not lowered.startswith("/gateway/"):
+        return path
+    if any(lowered.startswith(prefix) for prefix in _PROVIDER_GATEWAY_PREFIXES):
+        return path
+    if "/mlflow/" in lowered:
+        return path
+    if lowered == "/gateway/v1" or lowered.startswith("/gateway/v1/"):
+        rewritten = "/gateway/mlflow" + route[len("/gateway") :]
+        return rewritten + sep + query
+    if lowered.endswith("/invocations"):
+        rewritten = route[: -len("/invocations")] + "/mlflow/invocations"
+        return rewritten + sep + query
+    return path
+
+
 def mlflow_upstream_path(public_path: str, static_prefix: str | None) -> str:
+    public_path = tensorlane_gateway_path(public_path)
     if not public_path.startswith("/"):
         public_path = "/" + public_path
     prefix = normalize_static_prefix(static_prefix)

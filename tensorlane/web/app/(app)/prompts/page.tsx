@@ -72,7 +72,7 @@ export default function PromptsPage() {
           ) : filtered.length === 0 ? (
             <EmptyState
               title="No prompt versions registered"
-              body="Use mlflow.genai.register_prompt or the registry UI. Tensorlane lists what the workspace already stores."
+              body="Register a prompt from the Tensorlane SDK or the registry. Tensorlane lists what the workspace already stores."
             />
           ) : (
             <table className="data">

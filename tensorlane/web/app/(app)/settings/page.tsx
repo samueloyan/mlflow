@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { api, type Member, type Organization, type Workspace } from "@/lib/api";
+import { displayArtifactUri } from "@/lib/format";
 import { useShell } from "@/lib/shell";
 
 export default function SettingsPage() {
@@ -112,7 +113,7 @@ export default function SettingsPage() {
                 <tr key={row.id}>
                   <td>{row.name}</td>
                   <td>{row.mlflow_workspace_name}</td>
-                  <td>{row.artifact_root}</td>
+                  <td>{displayArtifactUri(row.artifact_root)}</td>
                 </tr>
               ))}
             </tbody>

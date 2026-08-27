@@ -180,11 +180,11 @@ export function slugGatewayName(value: string): string {
 }
 
 export function gatewayInvokePath(endpointName: string): string {
-  return `/gateway/${encodeURIComponent(endpointName)}/mlflow/invocations`;
+  return `/gateway/${encodeURIComponent(endpointName)}/invocations`;
 }
 
 export function gatewayChatCompletionsPath(): string {
-  return "/gateway/mlflow/v1/chat/completions";
+  return "/gateway/v1/chat/completions";
 }
 
 export function gatewayOpenaiBasePath(): string {
@@ -489,9 +489,8 @@ export function sdkSnippet(trackingUri: string, endpointName: string): string {
   return `import os
 from openai import OpenAI
 
-# Tensorlane API key. The SDK still reads MLFLOW_TRACKING_TOKEN.
 client = OpenAI(
-    api_key=os.environ["MLFLOW_TRACKING_TOKEN"],
+    api_key=os.environ["TENSORLANE_API_KEY"],
     base_url="${trackingUri}${gatewayOpenaiBasePath()}",
 )
 print(client.chat.completions.create(
@@ -501,7 +500,7 @@ print(client.chat.completions.create(
 
 # Native invoke:
 # POST ${trackingUri}${gatewayInvokePath(endpointName)}
-# OpenAI-compatible: ${trackingUri}${gatewayChatCompletionsPath()}
+# Chat completions: ${trackingUri}${gatewayChatCompletionsPath()}
 # Anthropic: POST ${trackingUri}${gatewayAnthropicMessagesPath()}
 # Gemini: POST ${trackingUri}${gatewayGeminiGeneratePath(endpointName)}`;
 }

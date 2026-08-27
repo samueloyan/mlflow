@@ -1,4 +1,4 @@
-"""Python client for Tensorlane native APIs. Does not replace `import mlflow`."""
+"""Python client for Tensorlane native APIs. Tracking uses ``tensorlane.track``."""
 
 from __future__ import annotations
 

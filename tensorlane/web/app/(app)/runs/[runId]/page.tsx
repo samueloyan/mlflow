@@ -9,7 +9,7 @@ import { ChartCard, LineChart } from "@/components/ui/Charts";
 import { ErrorState } from "@/components/ui/EmptyState";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Tabs } from "@/components/ui/Tabs";
-import { formatDurationBetween, formatEpoch } from "@/lib/format";
+import { displayArtifactUri, formatDurationBetween, formatEpoch } from "@/lib/format";
 import { useTrackingContext } from "@/lib/useTrackingContext";
 import {
   getMetricHistory,
@@ -318,7 +318,7 @@ function RunDetailsInner() {
         <div className="card">
           <dl className="kv">
             <dt>Artifact URI</dt>
-            <dd className="mono">{run?.info?.artifact_uri ?? "—"}</dd>
+            <dd className="mono">{displayArtifactUri(run?.info?.artifact_uri)}</dd>
             <dt>Lifecycle</dt>
             <dd>{run?.info?.lifecycle_stage ?? "—"}</dd>
             <dt>Source type</dt>

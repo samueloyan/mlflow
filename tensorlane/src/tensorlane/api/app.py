@@ -24,6 +24,11 @@ from tensorlane.api.enterprise import (
 )
 from tensorlane.api.routes import _record_usage, router
 from tensorlane.authz import authorize
+from tensorlane.branding import (
+    inject_tracking_rebrand,
+    is_tracking_html,
+    tracking_unavailable_html,
+)
 from tensorlane.config import Settings
 from tensorlane.db.models import Organization, OrganizationMembership, Workspace
 from tensorlane.db.session import configure_session, create_schema, session_scope
@@ -128,17 +133,7 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
 
 def _mlflow_unavailable() -> Response:
     return Response(
-        content=(
-            "<!doctype html><html><head><meta charset='utf-8'><title>Workbench</title>"
-            "<style>body{font-family:Georgia,serif;background:#f3efe6;color:#161410;"
-            "margin:0;padding:48px;line-height:1.5} h1{font-weight:500} p{color:#6d675c}"
-            "</style></head><body><p style='letter-spacing:.16em;text-transform:uppercase;"
-            "color:#b85a28;font-size:11px'>Data plane</p><h1>MLflow is not running in this "
-            "environment.</h1><p>Start the Tensorlane compose stack (or <code>mlflow server "
-            "--enable-workspaces --static-prefix /mlflow</code>) and point "
-            "<code>MLFLOW_INTERNAL_URI</code> at it. The workbench will load here, same origin, "
-            "with Tensorlane chrome around it.</p></body></html>"
-        ),
+        content=tracking_unavailable_html(),
         media_type="text/html",
         status_code=200,
     )
@@ -524,9 +519,16 @@ async def _proxy_mlflow(app: FastAPI, request: Request, path: str) -> Response:
         if fallback is not None:
             return fallback
     response_headers = {k: v for k, v in upstream.headers.items() if k.lower() not in HOP_BY_HOP}
-    return Response(
-        content=upstream.content, status_code=upstream.status_code, headers=response_headers
-    )
+    body = upstream.content
+    if (
+        request.method == "GET"
+        and upstream.status_code == 200
+        and is_tracking_html(request.method, upstream.headers.get("content-type"))
+    ):
+        body = inject_tracking_rebrand(body)
+        response_headers.pop("content-length", None)
+        response_headers.pop("Content-Length", None)
+    return Response(content=body, status_code=upstream.status_code, headers=response_headers)
 
 
 async def _workspace_scoped_trace_artifact(

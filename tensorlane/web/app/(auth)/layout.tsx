@@ -12,8 +12,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             Serious infrastructure for serious AI teams.
           </h1>
           <p className="lede">
-            Organizations, identity, isolation, and a tracking host the Python SDK already
-            understands. Experiments stay in the tracking UI. Membership stays here.
+            Organizations, identity, isolation, and a tracking host your SDK points at.
+            Experiments stay in tracking. Membership stays here.
           </p>
         </div>
         <AuthHostChip />

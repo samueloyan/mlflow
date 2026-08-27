@@ -102,7 +102,7 @@ export default function EvaluationsPage() {
           ) : filtered.length === 0 ? (
             <EmptyState
               title="No judges yet"
-              body="Register a scorer with mlflow.genai.scorers against this tracking URI. Tensorlane lists every judge in the workspace."
+              body="Register a judge from the Tensorlane SDK against this tracking URI. Tensorlane lists every judge in the workspace."
             />
           ) : (
             <table className="data">
